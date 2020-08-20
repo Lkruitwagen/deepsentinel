@@ -1,0 +1,7 @@
+*.pyc
+*.pyd
+.ipynb_checkpoints
+data/
+!data/DL/.gitkeep
+!data/GEE/.gitkeep
+
