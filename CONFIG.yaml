@@ -1,0 +1,44 @@
+DATA_ROOT: /home/lucas/repos/deepsentinel/data
+DL:
+  S1_bands:
+  - vv
+  - vh
+  S2_bands:
+  - coastal-aerosol
+  - blue
+  - green
+  - red
+  - red-edge
+  - red-edge-2
+  - red-edge-3
+  - nir
+  - red-edge-4
+  - water-vapor
+  - cirrus
+  - swir1
+  - swir2
+  - alpha
+GEE:
+  S1_bands:
+  - VV
+  - VH
+  S2_bands:
+  - B1
+  - B2
+  - B3
+  - B4
+  - B5
+  - B6
+  - B7
+  - B8
+  - B8A
+  - B9
+  - B11
+  - B12
+day_offset: 3
+dt_lookup: 30
+max_date: '2020-07-31'
+mosaic: false
+patch_size: 64
+resolution: 10
+selfmatch_offset: 6
