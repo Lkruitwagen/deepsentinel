@@ -1,3 +1,29 @@
+import pyproj
+from functools import partial
+from shapely import geometry, ops, wkt
+import pygeos
+
+def pt2bbox_wgs(pt, use_pygeos=False):
+    #print (pt)
+    utm_zone = get_utm_zone(pt['lat'], pt['lon'])
+    proj_utm = pyproj.Proj(proj='utm',zone=utm_zone,ellps='WGS84')
+    proj_wgs = pyproj.Proj("+proj=longlat +ellps=WGS84 +datum=WGS84 +no_defs")
+    reproj_wgs_utm = partial(pyproj.transform, proj_wgs, proj_utm)
+    reproj_utm_wgs = partial(pyproj.transform, proj_utm, proj_wgs)
+
+    pt_utm = ops.transform(reproj_wgs_utm, geometry.Point(pt['lon'],pt['lat']))
+    
+    patch_size = 64 #px
+    res=10 #m
+    
+    bbox_utm = geometry.box(pt_utm.x-(patch_size*res)/2, pt_utm.y-(patch_size*res)/2, pt_utm.x+(patch_size*res)/2, pt_utm.y+(patch_size*res)/2)
+    
+    bbox_wgs = ops.transform(reproj_utm_wgs, bbox_utm)
+
+    if use_pygeos:
+        return pygeos.io.from_shapely(bbox_wgs)
+    else:
+        return bbox_wgs
 
 
 def get_utm_zone(lat,lon):
