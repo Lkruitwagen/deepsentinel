@@ -3,7 +3,7 @@ from functools import partial
 from shapely import geometry, ops, wkt
 import pygeos
 
-def pt2bbox_wgs(pt, use_pygeos=False):
+def pt2bbox_wgs(pt, patch_size, resolution, use_pygeos=False):
     #print (pt)
     utm_zone = get_utm_zone(pt['lat'], pt['lon'])
     proj_utm = pyproj.Proj(proj='utm',zone=utm_zone,ellps='WGS84')
@@ -13,10 +13,7 @@ def pt2bbox_wgs(pt, use_pygeos=False):
 
     pt_utm = ops.transform(reproj_wgs_utm, geometry.Point(pt['lon'],pt['lat']))
     
-    patch_size = 64 #px
-    res=10 #m
-    
-    bbox_utm = geometry.box(pt_utm.x-(patch_size*res)/2, pt_utm.y-(patch_size*res)/2, pt_utm.x+(patch_size*res)/2, pt_utm.y+(patch_size*res)/2)
+    bbox_utm = geometry.box(pt_utm.x-(patch_size*resolution)/2, pt_utm.y-(patch_size*resolution)/2, pt_utm.x+(patch_size*resolution)/2, pt_utm.y+(patch_size*resolution)/2)
     
     bbox_wgs = ops.transform(reproj_utm_wgs, bbox_utm)
 

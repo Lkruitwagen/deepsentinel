@@ -16,14 +16,21 @@ import matplotlib.pyplot as plt
 
 
 from deepsentinel.utils.geoutils import *
+from deepsentinel.utils.storageutils import GCPClient, AzureClient
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-def DL_downloader(version, pts, ii_ps, CONFIG, mp_idx):
+def DL_downloader(version, pts, ii_ps, CONFIG, mp_idx, destinations):
     
     import descarteslabs as dl
     raster_client = dl.Raster()
+    
+    if 'gcp' in destinations:
+        gcp_client = GCPClient(CONFIG['gcp_credentials_path'],CONFIG['gcp_storage_bucket'],version)
+        
+    if 'azure' in destinations:
+        azure_client = AzureClient(CONFIG['azure_path'], version, make_container=False)
     
     logger_mp = logging.getLogger(f'DL_{mp_idx}')
     
@@ -122,19 +129,35 @@ def DL_downloader(version, pts, ii_ps, CONFIG, mp_idx):
                                             )
 
 
+            if 'local' in destinations:
+                name_root = os.path.join(os.getcwd(),'data',version,str(idx),'_'.join([str(idx),'DL',pt['DL_S2'].split(':')[2][0:10], str(pt['lon']), str(pt['lat'])]))
 
-            name_root = os.path.join(os.getcwd(),'data',version,str(idx),'_'.join([str(idx),'DL',pt['DL_S2'].split(':')[2][0:10], str(pt['lon']), str(pt['lat'])]))
-
+            else:
+                name_root = os.path.join(os.getcwd(),'data','tmp','_'.join([str(idx),'DL',pt['DL_S2'].split(':')[2][0:10], str(pt['lon']), str(pt['lat'])]))
+                
             np.savez(name_root+'_S2arr.npz', arr=S2_arr.astype(np.float32))
             json.dump(S2_meta, open(name_root+'_S2meta.json','w'))
             np.savez(name_root+'_S1arr.npz', arr=S1_arr.astype(np.float32))
             json.dump(S1_meta, open(name_root+'_S1meta.json','w'))
             json.dump(tile, open(name_root+'_tile.json','w'))
 
-
-
             _save_thumbnail((S2_arr[:,:,(3,2,1)].astype(np.float32)/10000).clip(0,1), name_root+'_S2thumb.png')
             _save_thumbnail((np.stack([S1_arr[:,:,0],np.zeros(S1_arr.shape[0:2]),S1_arr[:,:,1]])/255*2.5).clip(0,1).transpose([1,2,0]), name_root+'_S1thumb.png')
+            
+            if 'gcp' in destinations:
+                for ext in ['_S2arr.npz','_S2meta.json','_S1arr.npz','_S1meta.json','_tile.json','_S2thumb.png','_S1thumb.png']:
+                    gcp_client.upload(name_root+ext)
+                
+            if 'azure' in destinations:
+                for ext in ['_S2arr.npz','_S2meta.json','_S1arr.npz','_S1meta.json','_tile.json','_S2thumb.png','_S1thumb.png']:
+                    azure_client.upload(name_root+ext)
+                
+            if 'local' not in destinations:
+                for ext in ['_S2arr.npz','_S2meta.json','_S1arr.npz','_S1meta.json','_tile.json','_S2thumb.png','_S1thumb.png']:
+                    os.remove(name_root+ext)
+                    
+            
+                
 
             print (f'done pt {idx}, S2_min: {S2_arr.min()}, S2_max: {S2_arr.max()}, S1_min: {S1_arr.min()}, S1_max: {S1_arr.max()}, {pt["DL_S2"]},{pt["lon"]},{pt["lat"]}')
         except Exception as e:
@@ -151,7 +174,7 @@ def DL_downloader(version, pts, ii_ps, CONFIG, mp_idx):
     
     
 
-def GEE_downloader(version, pts, ii_ps, CONFIG, mp_idx, TLs):
+def GEE_downloader(version, pts, ii_ps, CONFIG, mp_idx, TLs, destinations):
 
     from google.auth.transport.requests import AuthorizedSession
     from google.oauth2 import service_account
@@ -166,6 +189,12 @@ def GEE_downloader(version, pts, ii_ps, CONFIG, mp_idx, TLs):
     logger_mp = logging.getLogger(f'GEE_{mp_idx}')
     
     PROJ_WGS = pyproj.Proj("+proj=longlat +ellps=WGS84 +datum=WGS84 +no_defs")
+    
+    if 'gcp' in destinations:
+        gcp_client = GCPClient(CONFIG['gcp_credentials_path'],CONFIG['gcp_storage_bucket'],version)
+        
+    if 'azure' in destinations:
+        azure_client = AzureClient(CONFIG['azure_path'], version, make_container=False)
     
     def _save_thumbnail(arr, path):
         fig, ax = plt.subplots(1,1,figsize=(6,6))
@@ -295,8 +324,10 @@ def GEE_downloader(version, pts, ii_ps, CONFIG, mp_idx, TLs):
                 'crs_code':UTM_EPSG,
             }
 
-
-            name_root = os.path.join(CONFIG['DATA_ROOT'],version,str(idx),'_'.join([str(idx),'GEE',pt['DL_S2'].split(':')[2][0:10], str(pt['lon']), str(pt['lat'])]))
+            if 'local' in destinations:
+                name_root = os.path.join(CONFIG['DATA_ROOT'],version,str(idx),'_'.join([str(idx),'GEE',pt['DL_S2'].split(':')[2][0:10], str(pt['lon']), str(pt['lat'])]))
+            else:
+                name_root = os.path.join(os.getcwd(),'data','tmp','_'.join([str(idx),'GEE',pt['DL_S2'].split(':')[2][0:10], str(pt['lon']), str(pt['lat'])]))
 
             np.savez(name_root+'_S2arr.npz', arr=S2_arr.astype(np.float32))
             np.savez(name_root+'_S1arr.npz', arr=S1_arr.astype(np.float32))
@@ -304,6 +335,20 @@ def GEE_downloader(version, pts, ii_ps, CONFIG, mp_idx, TLs):
 
             _save_thumbnail((S2_arr[:,:,(3,2,1)]/10000).clip(0,1), name_root+'_S2thumb.png')
             _save_thumbnail((((np.stack([S1_arr[:,:,0],np.zeros(S1_arr.shape[0:2]),S1_arr[:,:,1]])).transpose([1,2,0])+np.abs(S1_arr.min()))/(S1_arr.max()-S1_arr.min())).clip(0,1), name_root+'_S1thumb.png')
+
+            
+            if 'gcp' in destinations:
+                for ext in ['_S2arr.npz','_S2meta.json','_S1arr.npz','_S1meta.json','_tile.json','_S2thumb.png','_S1thumb.png']:
+                    gcp_client.upload(name_root+ext)
+                
+            if 'azure' in destinations:
+                for ext in ['_S2arr.npz','_S2meta.json','_S1arr.npz','_S1meta.json','_tile.json','_S2thumb.png','_S1thumb.png']:
+                    azure_client.upload(name_root+ext)
+                
+            if 'local' not in destinations:
+                for ext in ['_S2arr.npz','_S2meta.json','_S1arr.npz','_S1meta.json','_tile.json','_S2thumb.png','_S1thumb.png']:
+                    os.remove(name_root+ext)
+            
             print (f'Done pt {idx}, S2_min: {S2_arr.min()}, S2_max: {S2_arr.max()}, S1_min: {S1_arr.min()}, S1_max: {S1_arr.max()}')
         except Exception as e:
             print (f'Error pt {idx}: {e}')
@@ -314,7 +359,7 @@ def GEE_downloader(version, pts, ii_ps, CONFIG, mp_idx, TLs):
 class SampleDownloader:
     
     
-    def __init__(self, version, use_dl, use_gee, multiprocess=False):
+    def __init__(self, version, destinations, use_dl, use_gee, multiprocess=False):
 
         # load config, credentials
         self.CONFIG = yaml.load(open(os.path.join(os.getcwd(),'CONFIG.yaml'),'r'), Loader=yaml.SafeLoader)
@@ -326,6 +371,8 @@ class SampleDownloader:
         
         self.version = version
         
+        self.destinations = destinations
+        
         self.use_dl = use_dl
         
         self.use_gee = use_gee
@@ -336,6 +383,12 @@ class SampleDownloader:
         # make directory
         if not os.path.exists(os.path.join(self.CONFIG['DATA_ROOT'],self.version)):
             os.makedirs(os.path.join(self.CONFIG['DATA_ROOT'],self.version))
+            
+            
+        if 'azure' in destinations:
+            # Azure cannot into make container in multiprocessing
+            from deepsentinel.utils.storageutils import AzureClient
+            AzureClient(self.CONFIG['azure_path'], version, make_container=True)
         
 
             
@@ -351,7 +404,8 @@ class SampleDownloader:
                  self.pts.iloc[ii_w*step:(ii_w+1)*step,:],
                  self.pts.iloc[ii_w*step:(ii_w+1)*step,:].index.values,
                  self.CONFIG,
-                 ii_w
+                 ii_w,
+                 self.destinations
                 )
 
             )
@@ -372,12 +426,12 @@ class SampleDownloader:
         else:
             TLs = None
         
-        GEE_downloader(self.version, self.pts, self.pts.index.values, self.CONFIG, 0, TLs)
+        GEE_downloader(self.version, self.pts, self.pts.index.values, self.CONFIG, 0, TLs, self.destinations)
         
 
         
         
 if __name__=="__main__":
-    downloader=SampleDownloader(version='v_null_2', use_dl=True, use_gee=False)
+    downloader=SampleDownloader(version='v_null_2', destinations=['local','azure'], use_dl=True, use_gee=False)
     downloader.download_samples_DL()
     downloader.download_samples_GEE()

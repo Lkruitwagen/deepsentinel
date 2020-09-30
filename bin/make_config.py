@@ -2,13 +2,20 @@ import os, yaml
 
 CONFIG = dict(
     DATA_ROOT = os.path.join(os.getcwd(),'data'),       # root directory for data
+    gcp_credentials_path = os.path.join(os.getcwd(),'deepsentinel-gcp-key.json'), # json key 
+    gcp_storage_bucket = 'deepsentinel',             # storage bucket
+    azure_path = os.path.join(os.getcwd(),'azure-connectionstring.txt'), # connection string
     max_date = '2020-07-31',                            # maximum query data
+    min_date = '2019-08-01',                            # minimum query date
     dt_lookup = 30,                                     # datetime lookup window, days
     day_offset = 3,                                     # S1-S2 offset lookup window, days
     selfmatch_offset = 6,                               # window for S2 selfmatch, hours
     resolution = 10,                                    # resolution, m
-    patch_size = 64,                                    # patch size, pix                                            
+    patch_size = 256,                                    # patch size, pix                                            
     mosaic = False,                                     # mosaic the matching images
+    orbit_period=12,                                    # orbit period for S1
+    scihub_auth=os.path.join(os.getcwd(),'credentials.json'), 
+    N_workers = 3,                                      # N_workers for async downloads
 
     DL = dict(
     	S1_bands = ['vv','vh'],
