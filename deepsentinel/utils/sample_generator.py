@@ -64,7 +64,6 @@ def DL_downloader(version, pts, ii_ps, CONFIG, mp_idx):
 
             except:
                 # search the dl catalog
-                print ('backup search')
                 S2_min_date = dt.strptime(pt['DL_S2'].split(':')[2][0:10],'%Y-%m-%d') - timedelta(days=1)
                 S2_max_date = S2_min_date + timedelta(days=2)
 
@@ -77,7 +76,7 @@ def DL_downloader(version, pts, ii_ps, CONFIG, mp_idx):
 
                 _ids = [s._dict()['properties']['id'] for s in S2_scenes]
 
-                print (pt['DL_S2'],[(_id, fuzz.ratio(_id,pt['DL_S2'])) for _id in _ids])
+                print ('S2 backup search',pt['DL_S2'],[(_id, fuzz.ratio(_id,pt['DL_S2'])) for _id in _ids])
                 _id = max(_ids, key=lambda _id: fuzz.ratio(_id,pt['DL_S2']))
 
                 S2_arr, S2_meta = raster_client.ndarray(_id, 
@@ -100,7 +99,6 @@ def DL_downloader(version, pts, ii_ps, CONFIG, mp_idx):
 
             except:
                 # search the dl catalog
-                print ('backup search')
                 S1_min_date = dt.strptime(pt['DL_S1'].split('_')[1],'%Y-%m-%d')- timedelta(days=1)
                 S1_max_date = S2_min_date + timedelta(days=2)
 
@@ -113,7 +111,7 @@ def DL_downloader(version, pts, ii_ps, CONFIG, mp_idx):
 
                 _ids = [s._dict()['properties']['id'] for s in S1_scenes]
 
-                print (pt['DL_S1'],[(_id, fuzz.ratio(_id,pt['DL_S1'])) for _id in _ids])
+                print ('S1 backup search', pt['DL_S1'],[(_id, fuzz.ratio(_id,pt['DL_S1'])) for _id in _ids])
                 _id = max(_ids, key=lambda _id: fuzz.ratio(_id,pt['DL_S1']))
 
                 S1_arr, S1_meta = raster_client.ndarray(_id, 
@@ -131,16 +129,16 @@ def DL_downloader(version, pts, ii_ps, CONFIG, mp_idx):
             json.dump(S2_meta, open(name_root+'_S2meta.json','w'))
             np.savez(name_root+'_S1arr.npz', arr=S1_arr.astype(np.float32))
             json.dump(S1_meta, open(name_root+'_S1meta.json','w'))
+            json.dump(tile, open(name_root+'_tile.json','w'))
 
 
 
-            _save_thumbnail((S2_arr[:,:,(3,2,1)].astype(np.float32)/10000*2.5).clip(0,1), name_root+'_S2thumb.png')
+            _save_thumbnail((S2_arr[:,:,(3,2,1)].astype(np.float32)/10000).clip(0,1), name_root+'_S2thumb.png')
             _save_thumbnail((np.stack([S1_arr[:,:,0],np.zeros(S1_arr.shape[0:2]),S1_arr[:,:,1]])/255*2.5).clip(0,1).transpose([1,2,0]), name_root+'_S1thumb.png')
 
-            print (f'done pt {idx}, coverage: {pt["coverage"]}')
+            print (f'done pt {idx}, S2_min: {S2_arr.min()}, S2_max: {S2_arr.max()}, S1_min: {S1_arr.min()}, S1_max: {S1_arr.max()}, {pt["DL_S2"]},{pt["lon"]},{pt["lat"]}')
         except Exception as e:
             print ('Error!')
-            print (pt)
             print (e)
 
         
@@ -165,7 +163,7 @@ def GEE_downloader(version, pts, ii_ps, CONFIG, mp_idx, TLs):
 
     session = AuthorizedSession(scoped_credentials)
         
-    logger_mp = logging.getLogger(f'DL_{mp_idx}')
+    logger_mp = logging.getLogger(f'GEE_{mp_idx}')
     
     PROJ_WGS = pyproj.Proj("+proj=longlat +ellps=WGS84 +datum=WGS84 +no_defs")
     
@@ -200,109 +198,115 @@ def GEE_downloader(version, pts, ii_ps, CONFIG, mp_idx, TLs):
 
         arr =  np.load(io.BytesIO(pixels_content))
         
-        print (arr)
         return np.dstack([arr[el] for el in arr.dtype.names]).astype(np.float32)
         
     for idx, pt in pts.iterrows():
         
-        # make the path
-        if not os.path.exists(os.path.join(CONFIG['DATA_ROOT'], version,str(idx))):
-            os.makedirs(os.path.join(CONFIG['DATA_ROOT'], version,str(idx)))
+        try:
         
-        
-            
-        tl_avail = str(idx) in TLs.keys() #) and np.prod([kk in TLs[str(idx)].keys() for kk in ['utm_zone','x_off','y_off']])
-          
-        print (idx, tl_avail, pt['lon'],pt['lat'])
-        
-        # get UTM zone
-        if not tl_avail:
-            utm_zone = get_utm_zone(pt['lat'],pt['lon'])
-            
-            pt_wgs = geometry.Point(pt['lon'],pt['lat'])
-            
-            # reprojection functions
-            proj_utm = pyproj.Proj(proj='utm',zone=utm_zone,ellps='WGS84')
-            reproj_wgs_utm = partial(pyproj.transform, PROJ_WGS, proj_utm)
-            reproj_utm_wgs = partial(pyproj.transform, proj_utm, PROJ_WGS)
+            # make the path
+            if not os.path.exists(os.path.join(CONFIG['DATA_ROOT'], version,str(idx))):
+                os.makedirs(os.path.join(CONFIG['DATA_ROOT'], version,str(idx)))
 
-            # get utm pt
-            pt_utm = ops.transform(reproj_wgs_utm, pt_wgs)
 
-            # get utm bbox
-            bbox_utm = geometry.box(
-                pt_utm.x-(CONFIG['patch_size']*CONFIG['resolution'])/2, 
-                pt_utm.y-(CONFIG['patch_size']*CONFIG['resolution'])/2, 
-                pt_utm.x+(CONFIG['patch_size']*CONFIG['resolution'])/2, 
-                pt_utm.y+(CONFIG['patch_size']*CONFIG['resolution'])/2)
+            tl_avail = str(idx) in TLs.keys() #) and np.prod([kk in TLs[str(idx)].keys() for kk in ['utm_zone','x_off','y_off']])
 
-            # reproj to wgs
-            bbox_wgs = ops.transform(reproj_utm_wgs, bbox_utm)
-            
-            x_off, y_off = bbox_utm.bounds[0], bbox_utm.bounds[1]
-            
-        else:
-            utm_zone = TLs[str(idx)]['properties']['zone']
-            x_off, y_off = TLs[str(idx)]['properties']['geotrans'][0], TLs[str(idx)]['properties']['geotrans'][3]
-            
-            
-        #print ('utm_zone',utm_zone,TLs[str(idx)]['properties']['zone'])
-        #print ('x_off',x_off, TLs[str(idx)]['properties']['geotrans'][0])
-        #print ('y_off',y_off,TLs[str(idx)]['properties']['geotrans'][3])
-        #exit()
-            
-        if pt['lat']>0:
-            UTM_EPSG = f'EPSG:{str(326)+str(utm_zone)}'
-        else:
-            UTM_EPSG = f'EPSG:{str(327)+str(utm_zone)}'
+            #print (idx, tl_avail, pt['lon'],pt['lat'])
+
+            # get UTM zone
+            if not tl_avail:
+                utm_zone = get_utm_zone(pt['lat'],pt['lon'])
+
+                pt_wgs = geometry.Point(pt['lon'],pt['lat'])
+
+                # reprojection functions
+                proj_utm = pyproj.Proj(proj='utm',zone=utm_zone,ellps='WGS84')
+                reproj_wgs_utm = partial(pyproj.transform, PROJ_WGS, proj_utm)
+                reproj_utm_wgs = partial(pyproj.transform, proj_utm, PROJ_WGS)
+
+                # get utm pt
+                pt_utm = ops.transform(reproj_wgs_utm, pt_wgs)
+
+                # get utm bbox
+                bbox_utm = geometry.box(
+                    pt_utm.x-(CONFIG['patch_size']*CONFIG['resolution'])/2, 
+                    pt_utm.y-(CONFIG['patch_size']*CONFIG['resolution'])/2, 
+                    pt_utm.x+(CONFIG['patch_size']*CONFIG['resolution'])/2, 
+                    pt_utm.y+(CONFIG['patch_size']*CONFIG['resolution'])/2)
+
+                # reproj to wgs
+                bbox_wgs = ops.transform(reproj_utm_wgs, bbox_utm)
+
+                x_off, y_off = bbox_utm.bounds[0], bbox_utm.bounds[1]
+                
+                if pt['lat']>0:
+                    UTM_EPSG = f'EPSG:{str(326)+str(utm_zone)}'
+                else:
+                    UTM_EPSG = f'EPSG:{str(327)+str(utm_zone)}'
+
+            else:
+                utm_zone = TLs[str(idx)]['properties']['zone']
+                x_off, y_off = TLs[str(idx)]['properties']['geotrans'][0], TLs[str(idx)]['properties']['geotrans'][3]
+                UTM_EPSG = TLs[str(idx)]['properties']['cs_code']
+
+
+            #print ('utm_zone',utm_zone,TLs[str(idx)]['properties']['zone'])
+            #print ('x_off',x_off, TLs[str(idx)]['properties']['geotrans'][0])
+            #print ('y_off',y_off,TLs[str(idx)]['properties']['geotrans'][3])
+            #exit()
 
             
-        S2_arr = _get_GEE_arr(
-            session=session, 
-            name=pt['GEE_S2'], 
-            bands=CONFIG['GEE']['S2_bands'], 
-            x_off=x_off, 
-            y_off=y_off, 
-            patch_size=CONFIG['patch_size'],
-            crs_code=UTM_EPSG
-        )
-        
-        S1_arr = _get_GEE_arr(
-            session=session, 
-            name=pt['GEE_S1'], 
-            bands=CONFIG['GEE']['S1_bands'], 
-            x_off=x_off, 
-            y_off=y_off, 
-            patch_size=CONFIG['patch_size'],
-            crs_code=UTM_EPSG
-        )
-        
-        if tl_avail:
-            tile = TLs[str(idx)]
-        else:
-            tile = None
-        
-        GEE_meta = {
-            'tile':tile,
-            'S2_name':pt['GEE_S2'],
-            'S1_name':pt['GEE_S1'],
-            'S2_bands':CONFIG['GEE']['S2_bands'],
-            'S1_bands':CONFIG['GEE']['S1_bands'],
-            'x_off':x_off, 
-            'y_off':y_off, 
-            'patch_size':CONFIG['patch_size'], 
-            'crs_code':UTM_EPSG,
-        }
-        print (S2_arr.min(), S2_arr.max(), S1_arr.min(), S1_arr.max())
-        
-        name_root = os.path.join(CONFIG['DATA_ROOT'],version,str(idx),'_'.join([str(idx),'GEE',pt['DL_S2'].split(':')[2][0:10], str(pt['lon']), str(pt['lat'])]))
 
-        np.savez(name_root+'_S2arr.npz', arr=S2_arr.astype(np.float32))
-        np.savez(name_root+'_S1arr.npz', arr=S1_arr.astype(np.float32))
-        json.dump(GEE_meta, open(name_root+'_GEE_meta.json','w'))
 
-        _save_thumbnail((S2_arr[:,:,(3,2,1)]/10000*2.5).clip(0,1), name_root+'_S2thumb.png')
-        _save_thumbnail((np.stack([S1_arr[:,:,0],np.zeros(S1_arr.shape[0:2]),S1_arr[:,:,1]])).transpose([1,2,0]), name_root+'_S1thumb.png')
+            S2_arr = _get_GEE_arr(
+                session=session, 
+                name=pt['GEE_S2'], 
+                bands=CONFIG['GEE']['S2_bands'], 
+                x_off=x_off, 
+                y_off=y_off, 
+                patch_size=CONFIG['patch_size'],
+                crs_code=UTM_EPSG
+            )
+
+            S1_arr = _get_GEE_arr(
+                session=session, 
+                name=pt['GEE_S1'], 
+                bands=CONFIG['GEE']['S1_bands'], 
+                x_off=x_off, 
+                y_off=y_off, 
+                patch_size=CONFIG['patch_size'],
+                crs_code=UTM_EPSG
+            )
+
+            if tl_avail:
+                tile = TLs[str(idx)]
+            else:
+                tile = None
+
+            GEE_meta = {
+                'tile':tile,
+                'S2_name':pt['GEE_S2'],
+                'S1_name':pt['GEE_S1'],
+                'S2_bands':CONFIG['GEE']['S2_bands'],
+                'S1_bands':CONFIG['GEE']['S1_bands'],
+                'x_off':x_off, 
+                'y_off':y_off, 
+                'patch_size':CONFIG['patch_size'], 
+                'crs_code':UTM_EPSG,
+            }
+
+
+            name_root = os.path.join(CONFIG['DATA_ROOT'],version,str(idx),'_'.join([str(idx),'GEE',pt['DL_S2'].split(':')[2][0:10], str(pt['lon']), str(pt['lat'])]))
+
+            np.savez(name_root+'_S2arr.npz', arr=S2_arr.astype(np.float32))
+            np.savez(name_root+'_S1arr.npz', arr=S1_arr.astype(np.float32))
+            json.dump(GEE_meta, open(name_root+'_GEE_meta.json','w'))
+
+            _save_thumbnail((S2_arr[:,:,(3,2,1)]/10000).clip(0,1), name_root+'_S2thumb.png')
+            _save_thumbnail((((np.stack([S1_arr[:,:,0],np.zeros(S1_arr.shape[0:2]),S1_arr[:,:,1]])).transpose([1,2,0])+np.abs(S1_arr.min()))/(S1_arr.max()-S1_arr.min())).clip(0,1), name_root+'_S1thumb.png')
+            print (f'Done pt {idx}, S2_min: {S2_arr.min()}, S2_max: {S2_arr.max()}, S1_min: {S1_arr.min()}, S1_max: {S1_arr.max()}')
+        except Exception as e:
+            print (f'Error pt {idx}: {e}')
         
     return True
 
@@ -374,6 +378,6 @@ class SampleDownloader:
         
         
 if __name__=="__main__":
-    downloader=SampleDownloader(version='v_null', use_dl=True, use_gee=False)
-    # downloader.download_samples_DL()
+    downloader=SampleDownloader(version='v_null_2', use_dl=True, use_gee=False)
+    downloader.download_samples_DL()
     downloader.download_samples_GEE()

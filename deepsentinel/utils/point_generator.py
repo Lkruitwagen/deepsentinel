@@ -104,6 +104,9 @@ class PointGenerator:
 
             S1_df, S2_L1C_df, S2_L2A_df = self.load_catalog(start_date + timedelta(days=self.CONFIG['orbit_period']*orbit))
             
+            # filter only desired polarisation for S1
+            S1_df = S1_df[S1_df['polarisationmode']=='VV VH']
+            
             S2_L1C_df['beginposition'] = pd.to_datetime(S2_L1C_df['beginposition'])
             S2_L2A_df['beginposition'] = pd.to_datetime(S2_L2A_df['beginposition'])
             S1_df['beginposition'] = pd.to_datetime(S1_df['beginposition'])
@@ -113,6 +116,16 @@ class PointGenerator:
             S2_L2A_df = S2_L2A_df[S2_L2A_df['level1cpdiidentifier'].isin(S2_L1C_df['level1cpdiidentifier'])]
             S2_L2A_df = S2_L2A_df.set_index('level1cpdiidentifier')
             S2_L1C_df = S2_L1C_df.set_index('level1cpdiidentifier')
+            
+            # get S2_L2A_df geometry intersection
+            S2_L2A_df['utm_tile'] = S2_L2A_df['title'].str.split('_').str[5].str[1:]
+            S2_L2A_df = pd.merge(S2_L2A_df.reset_index(), self.S2_tiles[['Name','geometry']], how='left',left_on='utm_tile',right_on='Name')
+            S2_L2A_df = S2_L2A_df.set_index('level1cpdiidentifier')
+            S2_L2A_df['intersection_geom'] = S2_L2A_df.apply(lambda row: row['geometry'].intersection(wkt.loads(row['footprint'])), axis=1)
+            
+            # get coverage
+            S2_L2A_df['coverage'] = S2_L2A_df.apply(lambda row: area(geometry.mapping(row['intersection_geom']))/area(geometry.mapping(wkt.loads(row['footprint']))), axis=1)
+            S2_L2A_df['naive_coverage'] = S2_L2A_df.apply(lambda row: row['intersection_geom'].area/wkt.loads(row['footprint']).area, axis=1)
             
 
 
@@ -126,7 +139,7 @@ class PointGenerator:
                 # obtain points
                 new_pts = self._sample_land_points(N_points-len(pts))
 
-                new_pts['bbox_wgs'] = new_pts.apply(lambda pt: pt2bbox_wgs(pt, use_pygeos=True), axis=1)
+                new_pts['bbox_wgs'] = new_pts.apply(lambda pt: pt2bbox_wgs(pt, patch_size=self.CONFIG['patch_size'], resolution=self.CONFIG['resolution'], use_pygeos=True), axis=1)
 
                 # add matches
                 new_pts = self._get_matches(new_pts, S1_df, S2_L2A_df)
@@ -137,15 +150,19 @@ class PointGenerator:
                 
             pbar.close()
 
+            ### interim inspection:
+            #out_pts = pts
+            #out_pts['bbox_wgs'] = out_pts['bbox_wgs'].apply(pygeos.io.to_wkt)
+            #out_pts.to_parquet(f'./all_matches_{orbit}.parquet')
 
             # match pts to DL and GEE
-            pts['matches'] = pts['matches'].apply(random.choice)
+            pts['matches'] = pts['matches'].apply(lambda el: el[np.random.choice(len(el))])
             pts['S1_rec'] = pts['matches'].apply(lambda match: S1_df.loc[match[1],:].to_dict())
             pts['S2_L2A_rec'] = pts['matches'].apply(lambda match: S2_L2A_df.loc[match[0],:].to_dict())
             pts['S2_L1C_rec'] = pts['matches'].apply(lambda match: S2_L1C_df.loc[match[0],:].to_dict())
             
-            pts['coverage'] = pts.apply(self._map_coverage, axis=1)
-            pts['coverage_naive'] = pts.apply(self._map_coverage_naive, axis=1)
+            #pts['coverage'] = pts.apply(self._map_coverage, axis=1)
+            #pts['coverage_naive'] = pts.apply(self._map_coverage_naive, axis=1)
 
             pts['DL_S1'] = pts.apply(self._map_DL_S1, axis=1)
             pts['DL_S2'] = pts.apply(self._map_DL_S2, axis=1)
@@ -201,10 +218,10 @@ class PointGenerator:
         utm_tile = el['S2_L1C_rec']['title'].split('_')[5][1:]
         satellite = el['S2_L1C_rec']['title'].split('_')[0]
         
-        if round(el['coverage']*100)==100:
+        if round(el['S2_L2A_rec']['coverage']*100)==100:
             coverage_str = '99'
         else:
-            coverage_str = str(int(np.round(el['coverage']*100)))
+            coverage_str = str(int(np.round(el['S2_L2A_rec']['coverage']*100)))
         
         return base+'_'.join([dd,utm_tile,coverage_str,satellite,'v1'])
     
@@ -228,8 +245,8 @@ class PointGenerator:
 
             pts = np.random.rand(2*2*(N_pts-len(pt_df))).reshape((N_pts-len(pt_df))*2,2)
             #print ('pts shape',pts.shape)
-            pts[:,0] = pts[:,0] * 360 - 180
-            pts[:,1] = pts[:,1] * 180 - 90
+            pts[:,0] = pts[:,0] * 360 - 180 # lon
+            pts[:,1] = pts[:,1] * (80 + 70) - 70 # lat between -70 and 80
 
             pts_pygeos = pygeos.points(pts)
 
@@ -242,6 +259,9 @@ class PointGenerator:
             ii_p+=1
 
         pt_df = pt_df.iloc[0:N_pts]
+        
+        # reset the index
+        pt_df.index = range(len(pt_df))
 
         return pt_df
 
@@ -256,12 +276,14 @@ class PointGenerator:
                 return []
 
             S2_slice['matches'] = S2_slice.apply(lambda el: S1_slice.loc[(S1_slice['beginposition']>(el['beginposition']-timedelta(days=self.CONFIG['day_offset'])))&(S1_slice['beginposition']<(el['beginposition']+timedelta(days=self.CONFIG['day_offset']))),:].index.values, axis=1)
+            #print ('pre',S2_slice.columns, S2_slice.index.name)
             S2_slice = S2_slice.explode('matches').reset_index()
             S2_slice = S2_slice.loc[~S2_slice['matches'].isna()]
+            #print ('post',S2_slice.columns, S2_slice.index.name)
             return S2_slice[['level1cpdiidentifier','matches']].values.tolist()
 
         S1_tree = pygeos.STRtree([pygeos.io.from_wkt(subshp) for subshp in S1_df['footprint'].values.tolist()])
-        S2_tree = pygeos.STRtree([pygeos.io.from_wkt(subshp) for subshp in S2_df['footprint'].values.tolist()])
+        S2_tree = pygeos.STRtree([pygeos.io.from_shapely(subshp) for subshp in S2_df['intersection_geom'].values.tolist()])
 
         Q_S1 = pd.DataFrame(S1_tree.query_bulk(pts['bbox_wgs'].values.tolist(), predicate='within').T, columns=['pt_idx','S1_idx'])
         Q_S2 = pd.DataFrame(S2_tree.query_bulk(pts['bbox_wgs'].values.tolist(), predicate='within').T, columns=['pt_idx','S2_idx'])
@@ -269,6 +291,8 @@ class PointGenerator:
         S2_df['beginposition'] = pd.to_datetime(S2_df['beginposition'])
         S1_df['beginposition'] = pd.to_datetime(S1_df['beginposition'])
         S1_df['endposition'] = pd.to_datetime(S1_df['endposition'])
+        
+        #print ('pts',pts)
 
         pts['matches'] = pts.apply(apply_matches, axis=1)
 
@@ -277,6 +301,6 @@ class PointGenerator:
     
 if __name__=="__main__":
     generator=PointGenerator()
-    generator.main_generator(dt(2019,8,1,0,0), 2, 10,'v_null')
+    generator.main_generator(dt(2019,8,1,0,0), 2, 30,'v_null_2')
 
 
