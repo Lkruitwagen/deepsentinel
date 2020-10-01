@@ -179,7 +179,7 @@ def GEE_downloader(version, pts, ii_ps, CONFIG, mp_idx, TLs, destinations):
     from google.auth.transport.requests import AuthorizedSession
     from google.oauth2 import service_account
 
-    KEY = os.path.join(os.getcwd(),'ee-deepsentinel.json')
+    KEY = CONFIG['ee_credentials']
 
     credentials = service_account.Credentials.from_service_account_file(KEY)
     scoped_credentials = credentials.with_scopes(['https://www.googleapis.com/auth/cloud-platform'])
@@ -331,22 +331,22 @@ def GEE_downloader(version, pts, ii_ps, CONFIG, mp_idx, TLs, destinations):
 
             np.savez(name_root+'_S2arr.npz', arr=S2_arr.astype(np.float32))
             np.savez(name_root+'_S1arr.npz', arr=S1_arr.astype(np.float32))
-            json.dump(GEE_meta, open(name_root+'_GEE_meta.json','w'))
+            json.dump(GEE_meta, open(name_root+'_meta.json','w'))
 
             _save_thumbnail((S2_arr[:,:,(3,2,1)]/10000).clip(0,1), name_root+'_S2thumb.png')
             _save_thumbnail((((np.stack([S1_arr[:,:,0],np.zeros(S1_arr.shape[0:2]),S1_arr[:,:,1]])).transpose([1,2,0])+np.abs(S1_arr.min()))/(S1_arr.max()-S1_arr.min())).clip(0,1), name_root+'_S1thumb.png')
 
             
             if 'gcp' in destinations:
-                for ext in ['_S2arr.npz','_S2meta.json','_S1arr.npz','_S1meta.json','_tile.json','_S2thumb.png','_S1thumb.png']:
+                for ext in ['_S2arr.npz','_meta.json','_S1arr.npz','_S2thumb.png','_S1thumb.png']:
                     gcp_client.upload(name_root+ext)
                 
             if 'azure' in destinations:
-                for ext in ['_S2arr.npz','_S2meta.json','_S1arr.npz','_S1meta.json','_tile.json','_S2thumb.png','_S1thumb.png']:
+                for ext in ['_S2arr.npz','_meta.json','_S1arr.npz','_S2thumb.png','_S1thumb.png']:
                     azure_client.upload(name_root+ext)
                 
             if 'local' not in destinations:
-                for ext in ['_S2arr.npz','_S2meta.json','_S1arr.npz','_S1meta.json','_tile.json','_S2thumb.png','_S1thumb.png']:
+                for ext in ['_S2arr.npz','_meta.json','_S1arr.npz','_S2thumb.png','_S1thumb.png']:
                     os.remove(name_root+ext)
             
             print (f'Done pt {idx}, S2_min: {S2_arr.min()}, S2_max: {S2_arr.max()}, S1_min: {S1_arr.min()}, S1_max: {S1_arr.max()}')
@@ -425,13 +425,31 @@ class SampleDownloader:
             TLs = json.load(open(os.path.join(self.CONFIG['DATA_ROOT'],self.version, 'tiles.json'),'r'))
         else:
             TLs = None
+            
+        args = []
+        step = (len(self.pts)//self.CONFIG['N_workers'])+1
         
-        GEE_downloader(self.version, self.pts, self.pts.index.values, self.CONFIG, 0, TLs, self.destinations)
+        for ii_w in range(self.CONFIG['N_workers']):
+            args.append(
+                (self.version,
+                 self.pts.iloc[ii_w*step:(ii_w+1)*step,:],
+                 self.pts.iloc[ii_w*step:(ii_w+1)*step,:].index.values,
+                 self.CONFIG,
+                 ii_w,
+                 {str(kk):TLs[str(kk)] for kk in self.pts.iloc[ii_w*step:(ii_w+1)*step,:].index.values},
+                 self.destinations
+                )
+            )
+        
+        with mp.Pool(self.CONFIG['N_workers']) as P:
+            results = P.starmap(GEE_downloader, args)
+        
+        #GEE_downloader(self.version, self.pts, self.pts.index.values, self.CONFIG, 0, TLs, self.destinations)
         
 
         
         
 if __name__=="__main__":
-    downloader=SampleDownloader(version='v_null_2', destinations=['local','azure'], use_dl=True, use_gee=False)
-    downloader.download_samples_DL()
+    downloader=SampleDownloader(version='v_1k_nolabels', destinations=['local','gcp','azure'], use_dl=True, use_gee=False)
+    #downloader.download_samples_DL()
     downloader.download_samples_GEE()

@@ -2,6 +2,7 @@ import os, yaml
 
 CONFIG = dict(
     DATA_ROOT = os.path.join(os.getcwd(),'data'),       # root directory for data
+    ee_credentials = os.path.join(os.getcwd(),'ee-deepsentinel.json'),
     gcp_credentials_path = os.path.join(os.getcwd(),'deepsentinel-gcp-key.json'), # json key 
     gcp_storage_bucket = 'deepsentinel',             # storage bucket
     azure_path = os.path.join(os.getcwd(),'azure-connectionstring.txt'), # connection string

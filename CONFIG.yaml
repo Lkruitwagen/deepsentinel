@@ -1,4 +1,4 @@
-DATA_ROOT: /home/lucas/repos/deepsentinel/data
+DATA_ROOT: /home/jupyter/deepsentinel/data
 DL:
   S1_bands:
   - vv
@@ -35,10 +35,18 @@ GEE:
   - B9
   - B11
   - B12
+N_workers: 3
+azure_path: /home/jupyter/deepsentinel/azure-connectionstring.txt
 day_offset: 3
 dt_lookup: 30
+ee_credentials: /home/jupyter/deepsentinel/ee-deepsentinel.json
+gcp_credentials_path: /home/jupyter/deepsentinel/deepsentinel-gcp-key.json
+gcp_storage_bucket: deepsentinel
 max_date: '2020-07-31'
+min_date: '2019-08-01'
 mosaic: false
-patch_size: 64
+orbit_period: 12
+patch_size: 256
 resolution: 10
+scihub_auth: /home/jupyter/deepsentinel/credentials.json
 selfmatch_offset: 6
