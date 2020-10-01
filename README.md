@@ -15,6 +15,8 @@ Our goal is to produce pre-trained general purpose convolutional neural networks
 
 ![alt text](deepsentinel-summary.png)
 
+More details can be found at our ESA Phi-Week presentation [here](https://docs.google.com/presentation/d/1uWnbfVeZz21IY59E2RCHbfM-f7V5-xafEsuKpdTVAAE/edit?usp=sharing).
+
 
 ### Distribution
 
@@ -30,27 +32,59 @@ We are developing DeepSentinel open-source and make our training corpus and mode
 
 ## Installation
 
+
+### Environment, Repo, and Packages
+
 To use or contribute to this code base, please follow these instructions.
 
+We recommend using [Conda](https://docs.conda.io/en/latest/miniconda.html) for environment management. Download and install Miniconda:
 
-## Use
+    wget https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-x86_64.sh
 
-We provide a command line interface (CLI) at `cli.py`. The CLI can be used with the following parameters, see `python cli.py --help` for details.
+    sh ./Miniconda3-latest-Linux-x86_64.sh
 
+Create a new environment (with python 3.6 to resolve for compatibility issues between packages) and activate it:
+
+    conda create -n deepsentinel python=3.6
+
+    conda activate deepsentinel
+
+Clone this repo and enter it:
+
+    git clone https://github.com/Lkruitwagen/deepsentinel.git
+
+    cd deepsentinel
+
+Install the requirements. To get the substantial performance improvements of combining pygeos and geopandas, we'll install them with Conda.
+
+    conda install -c conda-forge --file conda_reqs.txt
+
+    pip install -r pip_reqs.txt
+
+### Credentials
+
+This repo makes extensive use of third party services. 
+
+#### Copernicus Open Access Hub
+
+Copernicus Open Access Hub is used to access Sentinel catalog data. Obtain credentials from https://scihub.copernicus.eu/dhus/#/self-registration and save them in a `json` with `json.dump('{"scihub":{"U":"<yourusername>","P":"<yourpassword>"}}', open('<path/to/credentials.json>','w'))`. Edit the path in `CONFIG.yaml` and `bin/make_config.py`.
+
+#### Descartes Labs
+
+Descartes Labs is used to obtain Sentinel-1 and Sentinel-2 data. Contact [DescartesLabs](https://www.descarteslabs.com/) for platform access and then use `descarteslabs auth login` to log in and save the access token to your `$HOME` directory. 
+
+#### Google Earth Engine
+
+Google Earth Engine is used to obtain Sentinel-1 and Sentinel-2 data. Sign up for Earth Engine [here](https://earthengine.google.com/new_signup/). You will need REST API access, for which you may need to contact Earth Engine support. Create a service account for use with the REST API following instructions [here](https://developers.google.com/earth-engine/guides/service_account). Edit the path to your Earth Engine `json` credentials in `CONFIG.yaml` and `bin/make_config.py`.
+
+#### Google Cloud Storage
+
+To use your own google cloud storage bucket with _DeepSentinel_, create your own storage bucket, and then create a service account and `json` key, following instructions [here](https://cloud.google.com/iam/docs/creating-managing-service-account-keys). Edit the path to your GCP `json` credentials in `CONFIG.yaml` and `bin/make_config.py`.
+
+#### Azure Cloud Storage
+
+To use your own Azure cloud storage account with _DeepSentinel_, create your own storage account, and then obtain a connection string for it, copying `Connection string` of `key1` under the Access keys tab for your storage account. Save the string in a txt file and edit the path to your connection string file in `CONFIG.yaml` and `bin/make_config.py`.
 
 ## Acknowledgements
 
-Acquisition Start Date and Time
-
-MMM_OPER_MSI_L1C_DS_ssss_yyyymmddthhmmss_SYYYMMDDTHHMMSS_Nxx.yy
-
-MMM = Mission ID: S2A or S2B
-OPER = File Class (Routine Operations)
-MSI = Sensor (Multi-Spectral Instrument)
-L1C = Processing Level
-DS = Datastrip
-ssss = Site Center
-yyyymmddthhmmss = Creation Date and Time
-S = Validity Start Time
-YYYYMMDDTHHMMSS = Acquisition Start Date and Time
-Nxx.yy = Vendor Software Version/Processing Baseline
+We are extremely grateful for the ongoing support of [DescartesLabs Impact Science Programme](https://www.descarteslabs.com/impact_science/) and [Microsoft AI for Earth](https://www.microsoft.com/en-us/ai/ai-for-earth) programme.
