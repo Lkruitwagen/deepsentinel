@@ -54,6 +54,28 @@ class GCPClient:
         blob.upload_from_filename(f)
         
         
+    def sync_download(self, source_dir, dest_dir):
+        
+        blobs = [bb for bb in self.client.list_blobs(self.bucket,prefix=source_dir)]
+        
+        for blob in tqdm(blobs, desc=f'Syncing {source_dir.split("/")[0]}'):
+                
+            if os.path.exists(os.path.join(dest_dir, blob.name)):
+                # if the path exists
+                if (os.stat(os.path.join(dest_dir, blob.name)).st_size!=blob.size):
+                    # if the sizes aren't the same:
+                    fpath = os.path.join(dest_dir, os.path.split(blob.name)[0])
+                    if not os.path.exists(fpath):
+                        os.makedirs(fpath)
+                    blob.download_to_filename(os.path.join(dest_dir, blob.name))
+            else: # download
+                fpath = os.path.join(dest_dir, os.path.split(blob.name)[0])
+                if not os.path.exists(fpath):
+                    os.makedirs(fpath)
+                blob.download_to_filename(os.path.join(dest_dir, blob.name))
+        
+        
+        
 class AzureClient:
     """
     A basic class to manage uploads and downloads from MS Azure.
@@ -76,9 +98,9 @@ class AzureClient:
         # Instantiates a client
         self.client = BlobServiceClient.from_connection_string(connection_str, logger=logger)
         
-        self.maybe_make_container(version.replace('_','-'), make_container)
+        self.maybe_make_container(version.lower().replace('_','-'), make_container)
         
-        self.version = version.replace('_','-')
+        self.version = version.lower().replace('_','-')
         
         
     def maybe_make_container(self, version, make_container=True):
