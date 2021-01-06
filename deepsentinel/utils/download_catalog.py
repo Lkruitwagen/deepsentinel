@@ -18,7 +18,7 @@ def async_product_worker(platform, product, date, auth):
                             producttype=product)
 
     df = pd.DataFrame.from_dict(products, orient='index')
-
+    
     df.to_parquet(os.path.join(os.getcwd(),'data','catalog','_'.join([platform, product, date.isoformat()[0:10]])+'.parquet'))
 
 def period_mpcaller(start_date, period, N_periods, auth, N_workers):
@@ -26,7 +26,7 @@ def period_mpcaller(start_date, period, N_periods, auth, N_workers):
     args = [(start_date, period, ii_t, auth['scihub']) for ii_t in range(N_periods)]
 
     with mp.Pool(N_workers) as p:
-        p.starmap(sentinel_products_worker, args)
+        p.starmap(async_product_worker, args)
     
 def period_worker(start_date, period, ii_t, auth):
     api = SentinelAPI(auth['U'], auth['P'])
@@ -67,4 +67,4 @@ if __name__=="__main__":
 
     N_workers = 3
 
-    sentinel_products_mpcaller(start_date, period, N_periods, auth, N_workers)
+    period_mpcaller(start_date, period, N_periods, auth, N_workers)

@@ -1,7 +1,7 @@
 """
 A class to generate a set of points for the imagery downloader.
 """
-import os, yaml, time, random, json, glob, logging
+import os, yaml, time, random, json, glob, logging, re
 from tqdm import tqdm
 from datetime import datetime as dt
 from datetime import timedelta
@@ -12,6 +12,7 @@ import numpy as np
 import pygeos
 from shapely import wkt, geometry
 from area import area
+from google.cloud import storage
 
 gpd.options.use_pygeos = True
 
@@ -25,17 +26,26 @@ logger = logging.getLogger(__name__)
 
 class PointGenerator:
 
-    def __init__(self):
+    def __init__(self, iso_geographies=None):
         self.CONFIG = yaml.load(open(os.path.join(os.getcwd(),'CONFIG.yaml'),'r'), Loader=yaml.SafeLoader)
         
         self.sentinelsat_auth = json.load(open(self.CONFIG['scihub_auth'],'r'))['scihub']
 
         countries = gpd.read_file(os.path.join(self.CONFIG['DATA_ROOT'],'ne_10m_countries.gpkg'))
-        self.countries = countries[~countries['geometry'].isna()]
+        countries = countries[~countries['geometry'].isna()]
+        
+        if iso_geographies:
+            countries = countries[countries['ISO_A2'].isin(iso_geographies)]
         
         self.tree = pygeos.STRtree([pygeos.io.from_shapely(subshp) for subshp in list(countries['geometry'].values)])
         
         self.S2_tiles = gpd.read_file(os.path.join(self.CONFIG['DATA_ROOT'],'S2_utm.gpkg'))
+        
+        
+        # Get datastrip_ids after Nov-2019 from GCP buckets
+        os.environ['GOOGLE_APPLICATION_CREDENTIALS'] = self.CONFIG['gcp_credentials_path']
+        self.client = storage.Client()
+        self.bucketname = 'gcp-public-data-sentinel-2'
     
     
     def check_catalog(self):
@@ -125,7 +135,7 @@ class PointGenerator:
             
             # get coverage
             S2_L2A_df['coverage'] = S2_L2A_df.apply(lambda row: area(geometry.mapping(row['intersection_geom']))/area(geometry.mapping(wkt.loads(row['footprint']))), axis=1)
-            S2_L2A_df['naive_coverage'] = S2_L2A_df.apply(lambda row: row['intersection_geom'].area/wkt.loads(row['footprint']).area, axis=1)
+            #S2_L2A_df['naive_coverage'] = S2_L2A_df.apply(lambda row: row['intersection_geom'].area/wkt.loads(row['footprint']).area, axis=1)
             
 
 
@@ -228,9 +238,31 @@ class PointGenerator:
     def _map_GEE_S2(self,el):
         base = 'projects/earthengine-public/assets/COPERNICUS/S2_SR/'
         dt0 = el['S2_L2A_rec']['s2datatakeid'].split('_')[1]
-        dt1 = el['S2_L1C_rec']['datastripidentifier'].split('_')[-2][1:]
         utm_tile = 'T'+el['S2_L2A_rec']['title'].split('_')[5][1:]
+        
+        if dt.strptime(dt0,'%Y%m%dT%H%M%S')>dt(2019,11,1,0,0):
+            # changed the manifest - now need to get this some other way.
+            # either download the whole index.csv.gz or use big query, etc.
+            tt = re.search(r'(\d).',utm_tile).group()
+            big_grid = utm_tile.replace(tt,'')[1:][0]
+            little_grid = utm_tile.replace(tt,'')[1:][1:]
+            
+            path=os.path.join('L2','tiles',tt,big_grid,little_grid,el['S2_L2A_rec']['filename'],'DATASTRIP')
+            
+            granule_blobs = [blob.name for blob in self.client.list_blobs(self.bucketname,prefix=path)]
+            
+            select_blob = [b for b in granule_blobs if ((os.path.split(b)[-1][0:3]=='DS_') and (os.path.split(b)[-1][-9:]=='_$folder$'))][0]
+            
+            dt1 = select_blob.split('_')[-2][1:]
+            
+            
+        else:
+            
+            dt1 = el['S2_L1C_rec']['datastripidentifier'].split('_')[-2][1:]
+
         return base+'_'.join([dt0,dt1,utm_tile])
+
+            
         
             
 
@@ -300,7 +332,10 @@ class PointGenerator:
     
     
 if __name__=="__main__":
-    generator=PointGenerator()
-    generator.main_generator(dt(2019,8,1,0,0), 2, 30,'v_null_2')
+    COUNTRY_CODES_EU = ['AT','BE','BG','CY','CZ','DK','EE','FI','FR','DE','GR','HU','IE','IT','LV','LT','LU','MT','NL','PL','PT','RO','SK','SI','ES','SE','GB']
+    generator=PointGenerator(iso_geographies=None)
+    generator.main_generator(dt(2019,8,1,0,0), 31, 323,'DEMO_unlabelled')
+    #generator.main_generator(dt(2019,12,1,0,0), 1, 10,'test_gcp_eu2')
+
 
 
