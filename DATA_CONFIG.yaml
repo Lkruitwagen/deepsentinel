@@ -18,6 +18,13 @@ DL:
   - swir1
   - swir2
   - alpha
+DL_LC:
+  LC_bands:
+  - CLC_class
+  LC_end_date: '2019-01-05'
+  LC_product: oxford-university:corine-land-cover
+  LC_start_date: '2018-12-01'
+  legend_json: /home/jupyter/deepsentinel/data/CLC_100m_colmap.json
 GEE:
   S1_bands:
   - VV
@@ -35,7 +42,7 @@ GEE:
   - B9
   - B11
   - B12
-N_workers: 3
+N_workers: 8
 azure_path: /home/jupyter/deepsentinel/azure-connectionstring.txt
 day_offset: 3
 dt_lookup: 30
@@ -46,6 +53,7 @@ max_date: '2020-07-31'
 min_date: '2019-08-01'
 mosaic: false
 orbit_period: 12
+osm_credentials: /home/jupyter/deepsentinel/osm_credentials.json
 patch_size: 256
 resolution: 10
 scihub_auth: /home/jupyter/deepsentinel/credentials.json

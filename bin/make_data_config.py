@@ -6,6 +6,8 @@ CONFIG = dict(
     gcp_credentials_path = os.path.join(os.getcwd(),'deepsentinel-gcp-key.json'), # json key 
     gcp_storage_bucket = 'deepsentinel',             # storage bucket
     azure_path = os.path.join(os.getcwd(),'azure-connectionstring.txt'), # connection string
+    scihub_auth=os.path.join(os.getcwd(),'credentials.json'), 
+    osm_credentials = os.path.join(os.getcwd(),'osm_credentials.json'),
     max_date = '2020-07-31',                            # maximum query data
     min_date = '2019-08-01',                            # minimum query date
     dt_lookup = 30,                                     # datetime lookup window, days
@@ -15,7 +17,6 @@ CONFIG = dict(
     patch_size = 256,                                    # patch size, pix                                            
     mosaic = False,                                     # mosaic the matching images
     orbit_period=12,                                    # orbit period for S1
-    scihub_auth=os.path.join(os.getcwd(),'credentials.json'), 
     N_workers = 3,                                      # N_workers for async downloads
 
     DL = dict(
@@ -25,7 +26,14 @@ CONFIG = dict(
 	GEE = dict(
 		S2_bands = ['B1','B2', 'B3', 'B4','B5','B6','B7','B8','B8A','B9','B11','B12'],
 		S1_bands = ['VV','VH'],
-	)
+	),
+    DL_LC = dict(
+        LC_product = 'oxford-university:corine-land-cover',
+        LC_bands = ['CLC_class'],
+        LC_start_date = '2018-12-01',
+        LC_end_date = '2019-01-05',
+        legend_json = os.path.join(os.getcwd(),'data','CLC_100m_colmap.json'),
+    ),
 )
 
-yaml.dump(CONFIG, open(os.path.join(os.getcwd(),'CONFIG.yaml'),'w'))
+yaml.dump(CONFIG, open(os.path.join(os.getcwd(),'DATA_CONFIG.yaml'),'w'))
