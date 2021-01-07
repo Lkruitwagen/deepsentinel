@@ -1,4 +1,4 @@
-import glob, yaml, os
+import glob, yaml, os, json
 
 import numpy as np
 import pandas as pd
@@ -125,7 +125,7 @@ class VAEDataloader(Dataset):
             
         if self.channel_stats:
             # normalise the data
-            for ii_b, band in self.bands:
+            for ii_b, band in enumerate(self.bands):
                 X[ii_b,:,:] = (X[ii_b,:,:] - self.channel_stats['mean'][band['band']]) / self.channel_stats['std'][band['band']]
         
         Y = X.copy()
