@@ -88,3 +88,19 @@ To use your own Azure cloud storage account with _DeepSentinel_, create your own
 ## Acknowledgements
 
 We are extremely grateful for the ongoing support of [DescartesLabs Impact Science Programme](https://www.descarteslabs.com/impact_science/) and [Microsoft AI for Earth](https://www.microsoft.com/en-us/ai/ai-for-earth) programme.
+
+### tensorboard
+
+To use tensorboard to view experiments, run:
+
+    tensorboard --logdir /path/to/deepsentinel/experiments/tensorboard
+    
+This should start tensorboard running, usually at `localhost:6006`. To view tensorboard in your browser, create a remote ssh tunnel to your machine:
+
+    ssh -N -f -L localhost:6006:localhost:6006 <username>@<ip-address>
+    
+Or on gcloud (you may need to be logged in with `gcloud auth login`):
+
+    gcloud beta compute ssh --zone "<your-instance-zone>" "<your-instance-name>" --project "<your-instance-project>" -- -L 6006:localhost:6006
+
+    

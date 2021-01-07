@@ -7,3 +7,5 @@ pyarrow==0.17.1
 azure-storage-blob==12.5.0
 google-cloud-storage==1.31.0
 matplotlib==3.3.2
+swifter==1.0.6
+tensorboard==2.4.0

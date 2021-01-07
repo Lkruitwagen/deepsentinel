@@ -1,3 +1,5 @@
 sentinelsat==0.14
 area==1.1.1
 fuzzywuzzy==0.18.0
+sacred==0.8.2
+torchsummary==1.5.1
