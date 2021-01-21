@@ -23,15 +23,18 @@ More details can be found at our ESA Phi-Week presentation [here](https://docs.g
 We are developing DeepSentinel open-source and make our training corpus and models publicly available via both Google Cloud Storage and Azure Storage requester-pays instances. The following products are currently available:
 
 #### Training Corpuses
-- *v_1k_256px_nolabels*: 1,000 Sentinel-1 + Sentinel-2 256-pixel patch size samples, sampled from the global earth land mass (except antarctica) between 2019-08-01 and 2019-09-17.
-- Forthcoming - check back soon!
+- DEMO_unlabelled: 10,000 Sentinel-1 + Sentinel-2 256-pixel patch size samples, sampled from the global earth land mass (except antarctica) between 2018-01-01 and 2019-01-05.
+- DEMO_EU_labelled: 1,000 Sentinel-1 + Sentinel-2 256-pixel patch size samples, sampled from the EU28 between 2018-01-01 and 2019-01-05 with Copernicus Land Cover raster products.
+- 100k_unlabelled: 100,000 Sentinel-1 + Sentinel-2 256-pixel patch size samples, sampled from the global earth land mass (except antarctica) between 2019-01-01 and 2020-01-05.
 
 #### Pre-trained Models
 - Forthcoming - check back soon!
 
+## Acknowledgements
+
+We are extremely grateful for the ongoing support of [DescartesLabs Impact Science Programme](https://www.descarteslabs.com/impact_science/) and [Microsoft AI for Earth](https://www.microsoft.com/en-us/ai/ai-for-earth) programme. This work is also supported by Google Research Credits.
 
 ## Installation
-
 
 ### Environment, Repo, and Packages
 
@@ -85,9 +88,73 @@ To use your own google cloud storage bucket with _DeepSentinel_, create your own
 
 To use your own Azure cloud storage account with _DeepSentinel_, create your own storage account, and then obtain a connection string for it, copying `Connection string` of `key1` under the Access keys tab for your storage account. Save the string in a txt file and edit the path to your connection string file in `CONFIG.yaml` and `bin/make_config.py`.
 
-## Acknowledgements
 
-We are extremely grateful for the ongoing support of [DescartesLabs Impact Science Programme](https://www.descarteslabs.com/impact_science/) and [Microsoft AI for Earth](https://www.microsoft.com/en-us/ai/ai-for-earth) programme.
+
+
+    
+## Useage
+
+### Command Line Interface
+
+The data pipeline and training for _DeepSentinel_ can all be controlled from the command line interface (CLI) [cli.py]. The CLI has three main task groups, which can be accessed using --help.
+
+    Usage: cli.py [OPTIONS] COMMAND [ARGS]...
+
+    Options:
+      --help  Show this message and exit.
+
+    Commands:
+      generate-points   A method to seed points for a new dataset.
+      generate-samples
+      train
+
+#### generate-points
+
+To generate a new set of S1-Ss pairs, use `python cli.py generate-points`:
+
+    Usage: cli.py generate-points [OPTIONS] START_DATE N_POINTS NAME
+
+      A method to seed points for a new dataset.
+
+      PARAMETERS
+      ----------
+      NAME: str
+          The name of the new dataset.
+
+      N_POINTS: int
+          The number of data points to generate.
+
+      START_DATE: str
+          The start date for data collection in the form YYYY-mm-dd.
+
+    Options:
+      --conf TEXT         path to DATA_CONFIG.yaml
+      --n-orbits INTEGER  The number of orbits to spread the simulated points
+                          over.
+
+      --end-date TEXT     the end date to stop sampling points, as YYYY-mm-dd
+      --iso2 TEXT         A comma-separated list of iso-a2 country codes for
+                          geographic subsampling
+
+      --help              Show this message and exit.
+      
+_DeepSentinel_ uses the raw Copernicus data catalogues to generate coincident S1-S2 pairs. The temporal proximity between the two images can be controlled in the [DATA_CONFIG](conf/DATA_CONFIG.yaml) file. A `START_DATE` (YYYY-mm-dd) and `N_POINTS` must be specified for the new dataset, as well as a `NAME`, for example:
+
+    python cli.py generate-points 2018-01-01 20000 20k_demodata
+
+The orbits of S1 and S2 are coincident on a 12-day frequency, so _DeepSentinel_ generates a fixed number of points in each 12-day period. An `--end-date=YYYY-mm-dd` can optionally be specified instead of the number of orbits. The geographic area for generated points can be constrained using `--iso2=<comma-separated-list-of-iso_A2-codes>. An alternative configuration file can also be specified. For example:
+
+    python cli.py generate-points 2018-01-01 20000 20k_altdata --end-date=2018-07-01 --iso2=CA,US,MX --conf=/my_path/MY_CONFIG.yaml
+    
+    
+#### generate-samples
+
+
+
+#### train
+
+
+
 
 ### tensorboard
 
@@ -102,5 +169,3 @@ This should start tensorboard running, usually at `localhost:6006`. To view tens
 Or on gcloud (you may need to be logged in with `gcloud auth login`):
 
     gcloud beta compute ssh --zone "<your-instance-zone>" "<your-instance-name>" --project "<your-instance-project>" -- -L 6006:localhost:6006
-
-    

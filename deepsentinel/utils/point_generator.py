@@ -26,8 +26,12 @@ logger = logging.getLogger(__name__)
 
 class PointGenerator:
 
-    def __init__(self, iso_geographies=None):
-        self.CONFIG = yaml.load(open(os.path.join(os.getcwd(),'CONFIG.yaml'),'r'), Loader=yaml.SafeLoader)
+    def __init__(self, iso_geographies=None, conf=None):
+        
+        if not conf:
+            self.CONFIG = yaml.load(open(os.path.join(os.getcwd(),'conf','DATA_CONFIG.yaml'),'r'), Loader=yaml.SafeLoader)
+        else:
+            self.CONFIG = yaml.load(open(conf,'r'),Loader=yaml.SafeLoader)
         
         self.sentinelsat_auth = json.load(open(self.CONFIG['scihub_auth'],'r'))['scihub']
 
@@ -332,10 +336,7 @@ class PointGenerator:
     
     
 if __name__=="__main__":
-    COUNTRY_CODES_EU = ['AT','BE','BG','CY','CZ','DK','EE','FI','FR','DE','GR','HU','IE','IT','LV','LT','LU','MT','NL','PL','PT','RO','SK','SI','ES','SE','GB']
-    generator=PointGenerator(iso_geographies=None)
-    generator.main_generator(dt(2019,8,1,0,0), 31, 323,'DEMO_unlabelled')
-    #generator.main_generator(dt(2019,12,1,0,0), 1, 10,'test_gcp_eu2')
-
+    #COUNTRY_CODES_EU = ['AT','BE','BG','CY','CZ','DK','EE','FI','FR','DE','GR','HU','IE','IT','LV','LT','LU','MT','NL','PL','PT','RO','SK','SI','ES','SE','GB']
+    pass
 
 

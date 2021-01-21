@@ -1,0 +1,35 @@
+device: cuda
+encoder_layers:
+  VAE:
+    meow: cat
+model_config:
+  VAE:
+    h_dim: 9216
+    image_channels: 5
+    z_dim: 32
+model_spec: VAE
+pretrain: true
+pretrain_config:
+  VAE:
+    BATCH_SIZE: 64
+    DATALOADER_WORKERS: 6
+    EPOCHS: 10
+    LOG_INTERVAL: 4
+    LR: 5.0e-05
+pretrain_loader_config:
+  VAE:
+    bands:
+    - B2
+    - B3
+    - B4
+    - VV
+    - VH
+    channel_stats: /home/jupyter/deepsentinel/data/channel_stats/DEMO_unlabelled_GEE.json
+    data_config: /home/jupyter/deepsentinel/DATA_CONFIG.yaml
+    data_dir: /data/DEMO_unlabelled/
+    patch_size: 128
+    source: GEE
+sacred:
+  gcp_basedir: /
+  gcp_bucket: deepsentinel-models
+verbose: true

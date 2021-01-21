@@ -13,3 +13,4 @@ def async_load_parquets(parquet_files, N_workers):
         dfs = P.starmap(read_parquet, list2tup)
         
     return pd.concat(dfs)
+
