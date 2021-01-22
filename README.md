@@ -110,7 +110,7 @@ The data pipeline and training for _DeepSentinel_ can all be controlled from the
 
 #### generate-points
 
-To generate a new set of S1-Ss pairs, use `python cli.py generate-points`:
+To generate a new set of S1-S2 pairs, use `python cli.py generate-points`:
 
     Usage: cli.py generate-points [OPTIONS] START_DATE N_POINTS NAME
 
@@ -148,6 +148,34 @@ The orbits of S1 and S2 are coincident on a 12-day frequency, so _DeepSentinel_ 
     
     
 #### generate-samples
+
+To download imagery associated with a dataset of S1-S2 pairs, use `python cli.py generate-samples`:
+
+    Usage: cli.py generate-samples [OPTIONS] DESTINATIONS SOURCES NAME
+
+      Download imagery samples for a seeded dataset.
+
+      PARAMETERS
+      ----------
+      NAME: str
+          The name of the dataset to download.
+
+      SOURCES: str
+          A comma-separated list of sources to download the matching data from. Must be in ['dl','gee','osm','clc']:
+              dl: DescartesLabs (https://www.descarteslabs.com/)
+              gee: Google Earth Engine (https://earthengine.google.com/)
+              osm: OpenStreetMap (https://www.openstreetmap.org/, https://github.com/Lkruitwagen/deepsentinel-osm)
+              clc: Copernicus Land Cover (https://land.copernicus.eu/pan-european/corine-land-cover, mirrored on DescartesLabs)
+
+      DESTINATIONS: str
+          A comma-separated list of desintations for the generated data. Must be in ['local','gcp','azure']:
+              local: saved to <data_root>/<name>/
+              gcp: saved to a Google Cloud Storage Bucket
+              azure: saved to an Azure Cloud Storage Container
+
+    Options:
+      --conf TEXT  path to DATA_CONFIG.yaml
+      --help       Show this message and exit.
 
 
 

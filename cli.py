@@ -18,7 +18,7 @@ def cli():
 @click.argument('name', type=str)
 def generate_points(name, n_points, start_date, iso2, end_date, n_orbits, conf):
     """
-    A method to seed points for a new dataset.
+    Seed points for a new dataset.
     
     \b
     PARAMETERS
@@ -76,10 +76,64 @@ def generate_points(name, n_points, start_date, iso2, end_date, n_orbits, conf):
     logger.info(f'Running generator for {name} from {start_date.isoformat()} for {n_orbits} orbits with {pts_per_orbit} points per orbit')
     generator.main_generator(start_date, n_orbits, pts_per_orbit,name)
 
+    
 @cli.command()
-def generate_samples():
-    # TODO
-    pass
+@click.option('--conf', default=os.path.join(os.getcwd(),'conf','DATA_CONFIG.yaml'), help='path to DATA_CONFIG.yaml')
+@click.argument('destinations', type=str)
+@click.argument('sources', type=str)
+@click.argument('name', type=str)
+def generate_samples(name, sources, denstinations):
+    """
+    Download imagery samples for a seeded dataset.
+    
+    \b
+    PARAMETERS
+    ----------
+    NAME: str
+        The name of the dataset to download.
+        
+    SOURCES: str
+        A comma-separated list of sources to download the matching data from. Must be in ['dl','gee','osm','clc']:
+            dl: DescartesLabs (https://www.descarteslabs.com/)
+            gee: Google Earth Engine (https://earthengine.google.com/)
+            osm: OpenStreetMap (https://www.openstreetmap.org/, https://github.com/Lkruitwagen/deepsentinel-osm)
+            clc: Copernicus Land Cover (https://land.copernicus.eu/pan-european/corine-land-cover, mirrored on DescartesLabs)
+        
+    DESTINATIONS: str
+        A comma-separated list of desintations for the generated data. Must be in ['local','gcp','azure']:
+            local: saved to <data_root>/<name>/
+            gcp: saved to a Google Cloud Storage Bucket
+            azure: saved to an Azure Cloud Storage Container
+    """
+    
+    from deepsentinel.utils.sample_generator import SampleGenerator
+    logger = logging.getLogger('SAMPLE_IMAGERY')
+    
+    if True: logger.info('one liner!')
+
+    
+    # error check destinations and sources
+    for source in sources.split(','):
+        assert (source in ['dl','gee','osm','clc'])
+    sources = sources.split(',')
+    for dest in destinations:
+        assert (dest in ['local','gcp','azure'])
+    desintations = destinations.split(',')
+                       
+    logger.info('Sampling imagery with:')
+    logger.info(f'NAME:{name}')
+    logger.info(f'SOURCES:{sources}')
+    logger.info(f'DESTINATIONS:{destinations}')
+    
+    
+    
+    
+    #downloader=SampleDownloader(version='DEMO_unlabelled', destinations=destinations)
+
+    #downloader.download_samples_DL()
+    #downloader.download_samples_GEE()
+    #downloader.download_samples_LC()
+    #downloader.download_samples_OSM()
 
     
 @cli.command()

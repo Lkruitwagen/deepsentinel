@@ -23,10 +23,13 @@ logger = logging.getLogger(__name__)
 class SampleDownloader:
     
     
-    def __init__(self, version, destinations, use_dl, use_gee, multiprocess=False):
+    def __init__(self, version, destinations, use_dl, use_gee, conf=False, multiprocess=False):
 
         # load config, credentials
-        self.CONFIG = yaml.load(open(os.path.join(os.getcwd(),'CONFIG.yaml'),'r'), Loader=yaml.SafeLoader)
+        if not conf:
+            self.CONFIG = yaml.load(open(os.path.join(os.getcwd(),'conf','DATA_CONFIG.yaml'),'r'), Loader=yaml.SafeLoader)
+        else:
+            self.CONFIG = yaml.load(open(conf,'r'),Loader=yaml.SafeLoader)
 
         self.proj_wgs = pyproj.Proj("+proj=longlat +ellps=WGS84 +datum=WGS84 +no_defs")
 

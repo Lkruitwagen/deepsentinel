@@ -10,7 +10,7 @@ def async_product_caller(arg_tuples, N_workers):
     with mp.Pool(N_workers) as p:
         p.starmap(async_product_worker, arg_tuples)
 
-def async_product_worker(platform, product, date, auth):
+def async_product_worker(platform, product, date, auth, CATALOG_ROOT):
     api = SentinelAPI(auth['U'], auth['P'])
     
     products = api.query(date=(date, date+timedelta(days=1)),
@@ -19,16 +19,16 @@ def async_product_worker(platform, product, date, auth):
 
     df = pd.DataFrame.from_dict(products, orient='index')
     
-    df.to_parquet(os.path.join(os.getcwd(),'data','catalog','_'.join([platform, product, date.isoformat()[0:10]])+'.parquet'))
+    df.to_parquet(os.path.join(CATALOG_ROOT,'_'.join([platform, product, date.isoformat()[0:10]])+'.parquet'))
 
-def period_mpcaller(start_date, period, N_periods, auth, N_workers):
+def period_mpcaller(start_date, period, N_periods, auth, N_workers, catalog_Root):
 
-    args = [(start_date, period, ii_t, auth['scihub']) for ii_t in range(N_periods)]
+    args = [(start_date, period, ii_t, auth['scihub'], catalog_root) for ii_t in range(N_periods)]
 
     with mp.Pool(N_workers) as p:
         p.starmap(async_product_worker, args)
     
-def period_worker(start_date, period, ii_t, auth):
+def period_worker(start_date, period, ii_t, auth, CATALOG_ROOT):
     api = SentinelAPI(auth['U'], auth['P'])
     
     min_date = start_date + timedelta(days=period*ii_t)
@@ -40,7 +40,7 @@ def period_worker(start_date, period, ii_t, auth):
 
     S2_L2A_df = pd.DataFrame.from_dict(S2_products, orient='index')
 
-    S2_L2A_df.to_parquet(os.path.join(os.getcwd(),'data','catalog',f'S2_L2A_{str(ii_t)}_{min_date.isoformat()[0:10]}_{max_date.isoformat()[0:10]}.parquet'))
+    S2_L2A_df.to_parquet(os.path.join(CATALOG_ROOT,f'S2_L2A_{str(ii_t)}_{min_date.isoformat()[0:10]}_{max_date.isoformat()[0:10]}.parquet'))
     
     S2_L1C_products = api.query(date=(min_date, max_date),
                             platformname='Sentinel-2',
@@ -48,7 +48,7 @@ def period_worker(start_date, period, ii_t, auth):
 
     S2_L1C_df = pd.DataFrame.from_dict(S2_L1C_products, orient='index')
 
-    S2_L1C_df.to_parquet(os.path.join(os.getcwd(),'data','catalog',f'S2_L1C_{str(ii_t)}_{min_date.isoformat()[0:10]}_{max_date.isoformat()[0:10]}.parquet'))
+    S2_L1C_df.to_parquet(os.path.join(CATALOG_ROOT,f'S2_L1C_{str(ii_t)}_{min_date.isoformat()[0:10]}_{max_date.isoformat()[0:10]}.parquet'))
                             
     S1_products = api.query(date=(min_date, max_date),
                             platformname='Sentinel-1',
@@ -56,7 +56,7 @@ def period_worker(start_date, period, ii_t, auth):
 
     S1_df = pd.DataFrame.from_dict(S1_products, orient='index')
     
-    S1_df.to_parquet(os.path.join(os.getcwd(),'data','catalog',f'S1_{str(ii_t)}_{min_date.isoformat()[0:10]}_{max_date.isoformat()[0:10]}.parquet'))
+    S1_df.to_parquet(os.path.join(CATALOG_ROOT,f'S1_{str(ii_t)}_{min_date.isoformat()[0:10]}_{max_date.isoformat()[0:10]}.parquet'))
 
 if __name__=="__main__":
     start_date = date(2019,8,1)
@@ -67,4 +67,4 @@ if __name__=="__main__":
 
     N_workers = 3
 
-    period_mpcaller(start_date, period, N_periods, auth, N_workers)
+    period_mpcaller(start_date, period, N_periods, auth, N_workers, os.path.join(os.getcwd(),'data','catalog'))

@@ -2,6 +2,9 @@ import os, yaml
 
 CONFIG = dict(
     DATA_ROOT = os.path.join(os.getcwd(),'data'),       # root directory for data
+    NE_ROOT = os.path.join(os.getcwd(),'data'),       # root directory for data
+    CATALOG_ROOT = os.path.join(os.getcwd(),'data','catalog'), # root directory for catalog data
+    POINTS_ROOT = os.path.join(os.getcwd(),'data','pts'),      # root directory for points
     ee_credentials = os.path.join(os.getcwd(),'ee-deepsentinel.json'),
     gcp_credentials_path = os.path.join(os.getcwd(),'deepsentinel-gcp-key.json'), # json key 
     gcp_storage_bucket = 'deepsentinel',             # storage bucket
@@ -17,7 +20,7 @@ CONFIG = dict(
     patch_size = 256,                                    # patch size, pix                                            
     mosaic = False,                                     # mosaic the matching images
     orbit_period=12,                                    # orbit period for S1
-    N_workers = 3,                                      # N_workers for async downloads
+    N_workers = 4,                                      # N_workers for async downloads
 
     DL = dict(
     	S1_bands = ['vv','vh'],
@@ -36,4 +39,4 @@ CONFIG = dict(
     ),
 )
 
-yaml.dump(CONFIG, open(os.path.join(os.getcwd(),'DATA_CONFIG.yaml'),'w'))
+yaml.dump(CONFIG, open(os.path.join(os.getcwd(),'conf','DATA_CONFIG.yaml'),'w'))

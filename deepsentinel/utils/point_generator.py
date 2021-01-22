@@ -35,15 +35,15 @@ class PointGenerator:
         
         self.sentinelsat_auth = json.load(open(self.CONFIG['scihub_auth'],'r'))['scihub']
 
-        countries = gpd.read_file(os.path.join(self.CONFIG['DATA_ROOT'],'ne_10m_countries.gpkg'))
+        countries = gpd.read_file(os.path.join(self.CONFIG['NE_ROOT'],'ne_10m_countries.gpkg'))
         countries = countries[~countries['geometry'].isna()]
         
         if iso_geographies:
             countries = countries[countries['ISO_A2'].isin(iso_geographies)]
         
-        self.tree = pygeos.STRtree([pygeos.io.from_shapely(subshp) for subshp in list(countries['geometry'].values)])
+        self.tree = pygeos.STRtree([pygeos.io.from_shapely(subshp) for subshp in list(countries['geometry'].unary_union)])
         
-        self.S2_tiles = gpd.read_file(os.path.join(self.CONFIG['DATA_ROOT'],'S2_utm.gpkg'))
+        self.S2_tiles = gpd.read_file(os.path.join(self.CONFIG['NE_ROOT'],'S2_utm.gpkg'))
         
         
         # Get datastrip_ids after Nov-2019 from GCP buckets
@@ -54,7 +54,7 @@ class PointGenerator:
     
     def check_catalog(self):
         
-        data_files = sorted(glob.glob(os.path.join(os.getcwd(),'data','catalog','*.parquet')))
+        data_files = sorted(glob.glob(os.path.join(self.CONFIG['CATALOG_ROOT'],'*.parquet')))
         # platform, product, date
         data_records = [{
             'platform':os.path.split(f)[1].split('_')[0],
@@ -74,7 +74,7 @@ class PointGenerator:
         
         for platform, product in [('Sentinel-2','S2MSI2A'),('Sentinel-2','S2MSI1C'),('Sentinel-1','GRD')]:
             missing_dates = all_dates[~pd.Series(all_dates).isin(self.catalog.loc[(self.catalog['platform']==platform)&(self.catalog['product']==product),'date']).values]
-            missing_records += [(platform, product, dd, self.sentinelsat_auth) for dd in missing_dates]
+            missing_records += [(platform, product, dd, self.sentinelsat_auth, self.CONFIG['CATALOG_ROOT']) for dd in missing_dates]
             
         return missing_records
         
@@ -113,9 +113,9 @@ class PointGenerator:
 
         for orbit in range(N_orbits):
             
+            tic = time.time()
             
             
-
             S1_df, S2_L1C_df, S2_L2A_df = self.load_catalog(start_date + timedelta(days=self.CONFIG['orbit_period']*orbit))
             
             # filter only desired polarisation for S1
@@ -128,8 +128,10 @@ class PointGenerator:
             
             # only retain S2 records where there is both L1C and L2A
             S2_L2A_df = S2_L2A_df[S2_L2A_df['level1cpdiidentifier'].isin(S2_L1C_df['level1cpdiidentifier'])]
-            S2_L2A_df = S2_L2A_df.set_index('level1cpdiidentifier')
+            S2_L2A_df = S2_L2A_df.set_index('level1cpdiidentifier') # looks like it's just used to match them.
             S2_L1C_df = S2_L1C_df.set_index('level1cpdiidentifier')
+            
+            #print ('len S2', len(S2_L2A_df))
             
             # get S2_L2A_df geometry intersection
             S2_L2A_df['utm_tile'] = S2_L2A_df['title'].str.split('_').str[5].str[1:]
@@ -139,6 +141,7 @@ class PointGenerator:
             
             # get coverage
             S2_L2A_df['coverage'] = S2_L2A_df.apply(lambda row: area(geometry.mapping(row['intersection_geom']))/area(geometry.mapping(wkt.loads(row['footprint']))), axis=1)
+            #print ('got coverage',time.time()-tic)
             #S2_L2A_df['naive_coverage'] = S2_L2A_df.apply(lambda row: row['intersection_geom'].area/wkt.loads(row['footprint']).area, axis=1)
             
 
@@ -152,11 +155,14 @@ class PointGenerator:
 
                 # obtain points
                 new_pts = self._sample_land_points(N_points-len(pts))
+                #print ('got new pts',len(new_pts), time.time()-tic)
 
                 new_pts['bbox_wgs'] = new_pts.apply(lambda pt: pt2bbox_wgs(pt, patch_size=self.CONFIG['patch_size'], resolution=self.CONFIG['resolution'], use_pygeos=True), axis=1)
+                #print ('got bboxes', time.time()-tic)
 
                 # add matches
                 new_pts = self._get_matches(new_pts, S1_df, S2_L2A_df)
+                #print ('got matches', time.time()-tic)
 
                 pts = pts.append(new_pts)
                 
@@ -187,6 +193,8 @@ class PointGenerator:
             
         all_pts = pd.concat(all_pts)
         
+        logger.info('Got all points. Final formatting.')
+        
         # format for disk
         all_pts['bbox_wgs'] = all_pts['bbox_wgs'].apply(pygeos.io.to_wkt)
         for col in ['S1_rec', 'S2_L2A_rec','S2_L1C_rec']:
@@ -195,9 +203,9 @@ class PointGenerator:
         all_pts['idx'] = range(len(all_pts))
         all_pts = all_pts.set_index('idx')
                 
-        logger.info(f'Generated {len(all_pts)} points. Writing to Parquet at {os.path.join(self.CONFIG["DATA_ROOT"], "pts",name+".parquet")}')
+        logger.info(f'Generated {len(all_pts)} points. Writing to Parquet at {os.path.join(self.CONFIG["POINTS_ROOT"],name+".parquet")}')
         
-        all_pts.to_parquet(os.path.join(self.CONFIG['DATA_ROOT'],'pts',name+'.parquet'))
+        all_pts.to_parquet(os.path.join(self.CONFIG['POINTS_ROOT'],name+'.parquet'))
             
             
     def _map_coverage(self, el):
@@ -244,7 +252,7 @@ class PointGenerator:
         dt0 = el['S2_L2A_rec']['s2datatakeid'].split('_')[1]
         utm_tile = 'T'+el['S2_L2A_rec']['title'].split('_')[5][1:]
         
-        if dt.strptime(dt0,'%Y%m%dT%H%M%S')>dt(2019,11,1,0,0):
+        if dt.strptime(dt0,'%Y%m%dT%H%M%S')>dt(2019,11,1,0,0) or el['S2_L1C_rec']['datastripidentifier'].split('_')[-2][1:]==None:
             # changed the manifest - now need to get this some other way.
             # either download the whole index.csv.gz or use big query, etc.
             tt = re.search(r'(\d).',utm_tile).group()
@@ -261,8 +269,11 @@ class PointGenerator:
             
             
         else:
-            
+            #try:
             dt1 = el['S2_L1C_rec']['datastripidentifier'].split('_')[-2][1:]
+            #except:
+            #    print (el['S2_L1C_rec'])
+            #    raise ValueError('a big bork')
 
         return base+'_'.join([dt0,dt1,utm_tile])
 
@@ -277,7 +288,6 @@ class PointGenerator:
         
         ii_p=0
         while len(pt_df)<N_pts:
-            tic = time.time()
 
             pts = np.random.rand(2*2*(N_pts-len(pt_df))).reshape((N_pts-len(pt_df))*2,2)
             #print ('pts shape',pts.shape)
