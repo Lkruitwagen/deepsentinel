@@ -1,4 +1,4 @@
-import click, os, logging
+import click, os, logging, yaml, json
 from datetime import datetime as dt
 from click import command, option, Option, UsageError
 
@@ -136,11 +136,75 @@ def generate_samples(name, sources, denstinations):
     #downloader.download_samples_OSM()
 
     
-@cli.command()
-def train():
+@cli.command(
+    context_settings=dict(
+        ignore_unknown_options=True,
+        allow_extra_args=True,    
+    )
+)
+@click.option('--conf', default=os.path.join(os.getcwd(),'conf','ML_CONFIG.yaml'), help='path to ML_CONFIG.yaml')
+@click.option('--observers', default='local,gcp', help='Comma-separated list of observers to add to experiment, from ["local","gcp"]')
+@click.option('--name', )
+@click.pass_context
+def train(ctx, conf, observers, name):
+    """
+    Run the model training scripts with Sacred and a YAML config file. 
+    
+    \b
+    Any additional parameters can also be specified:
+    --device=cuda
+    
+    Nested parameters can be specified like so:
+    --model_config--VAE--z_dim=16
+    --model_config--VAE={\"z_dim\":16}
+    """
+    from deepsentinel.utils.utils import get_from_dict, set_in_dict, make_nested_dict
     from deepsentinel.main import ex
-
-    r = ex.run()
+    from sacred.observers import FileStorageObserver
+    from sacred.observers import GoogleCloudStorageObserver
+    
+    logger = logging.getLogger('TRAINING')
+    
+    CONFIG = yaml.load(open(conf,'r'), Loader=yaml.SafeLoader)
+    
+    logger.info(f'Adding config from {conf}')
+    ex.add_config(conf)
+    
+    ctx_conf = {}
+    
+    for item in ctx.args:
+        kks,vv = item.split('=')
+        kks = kks.split('--')[1:]
+        
+        # cast vv to the type from the nested config
+        vv_type = type(get_from_dict(CONFIG,kks))   
+        if vv_type==dict:
+            vv = json.loads(vv)
+        else:
+            vv = vv_type(vv)
+        
+        # set in our update dict
+        try:
+            set_in_dict(ctx_conf,kks,vv)
+        except:
+            for ii_k in range(1,len(kks)):
+                try:
+                    set_in_dict(ctx_conf,kks[:-ii_k],make_nested_dict(kks[-1*ii_k:],vv))
+                    break
+                except:
+                    pass
+        
+    logger.info(f'Adding additional CLI config: {ctx_conf}')
+        
+    # add observers
+    if 'local' in observers:
+        logger.info(f'Adding local observer at {CONFIG["sacred"]["local"]}')
+        ex.observers.append(FileStorageObserver(CONFIG['sacred']['local']))
+    if 'gcp' in observers:
+        logger.info(f'Adding Google Cloud Observer at {CONFIG["sacred"]["gcp_bucket"]}/{CONFIG["sacred"]["gcp_basedir"]}')
+        ex.observers.append(GoogleCloudStorageObserver(bucket=CONFIG['sacred']['gcp_bucket'], basedir=CONFIG['sacred']['gcp_basedir']))
+        
+    r = ex.run(config_updates=ctx_conf)
 
 
 

@@ -73,7 +73,10 @@ def pretrain_loop(model,
     torch.save(optimizer.state_dict(), os.path.join(os.getcwd(), 'tmp','pretrain_optimizer.pth'))
 
 
-def train():
+def train_synthrgb():
+    pass
+
+def train_lc():
     pass
 
 def test():

@@ -1,20 +1,27 @@
 device: cuda
+encoder: basic_bottleneck
 encoder_layers:
   VAE:
     meow: cat
-model_config:
-  VAE:
-    h_dim: 9216
-    image_channels: 5
-    z_dim: 32
-model_spec: VAE
-pretrain: true
-pretrain_config:
-  VAE:
+encoder_params:
+  basic_bottleneck:
+    input_channels: 5
+finetune: null
+finetune_config:
+  synthetic_rgb:
     BATCH_SIZE: 64
     DATALOADER_WORKERS: 6
     EPOCHS: 10
     LOG_INTERVAL: 4
+    LR: 5.0e-05
+load_run: null
+pretrain: VAE
+pretrain_config:
+  VAE:
+    BATCH_SIZE: 32
+    DATALOADER_WORKERS: 6
+    EPOCHS: 2
+    LOG_INTERVAL: 10
     LR: 5.0e-05
 pretrain_loader_config:
   VAE:
@@ -25,11 +32,17 @@ pretrain_loader_config:
     - VV
     - VH
     channel_stats: /home/jupyter/deepsentinel/data/channel_stats/DEMO_unlabelled_GEE.json
-    data_config: /home/jupyter/deepsentinel/DATA_CONFIG.yaml
+    data_config: /home/jupyter/deepsentinel/conf/DATA_CONFIG.yaml
     data_dir: /data/DEMO_unlabelled/
     patch_size: 128
     source: GEE
+pretrain_model_config:
+  VAE:
+    h_dim: 9216
+    image_channels: 5
+    z_dim: 32
 sacred:
   gcp_basedir: /
   gcp_bucket: deepsentinel-models
+  local: /home/jupyter/deepsentinel/experiments/sacred
 verbose: true

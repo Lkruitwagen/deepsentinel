@@ -107,11 +107,18 @@ class PointGenerator:
             
             
         all_pts = []
+        logger.info('Checking any previously generated data...')
+        
+        pt_files = glob.glob(os.path.join(self.CONFIG['POINTS_ROOT'],name+'*'+'.parquet'))
+        done_orbits = [int(os.path.splitext(os.path.split(f)[-1])[0].split('_')[-1]) for f in pt_files]
+        do_orbits = [o for o in range(N_orbits) if o not in done_orbits]
+
+        logger.info(f'Generating points for orbits: {do_orbits}')
+        
+        
         
 
-        logger.info(f'Generating points for N_orbits: {N_orbits}')
-
-        for orbit in range(N_orbits):
+        for orbit in do_orbits:
             
             tic = time.time()
             
@@ -189,23 +196,25 @@ class PointGenerator:
             pts['GEE_S1'] =  pts['S1_rec'].apply(lambda el: 'projects/earthengine-public/assets/COPERNICUS/S1_GRD/'+el['title'])
             pts['GEE_S2'] = pts.apply(self._map_GEE_S2, axis=1)
             
-            all_pts.append(pts)
+            # format for disk
+            pts['bbox_wgs'] = pts['bbox_wgs'].apply(pygeos.io.to_wkt)
+            for col in ['S1_rec', 'S2_L2A_rec','S2_L1C_rec']:
+                pts[col] = pts[col].apply(lambda el: el['title'])
             
-        all_pts = pd.concat(all_pts)
+            pts.to_parquet(os.path.join(self.CONFIG['POINTS_ROOT'],f'{name}_{orbit}.parquet'))
+                  
+        logger.info('Got all points. Compiling')
         
-        logger.info('Got all points. Final formatting.')
-        
-        # format for disk
-        all_pts['bbox_wgs'] = all_pts['bbox_wgs'].apply(pygeos.io.to_wkt)
-        for col in ['S1_rec', 'S2_L2A_rec','S2_L1C_rec']:
-            all_pts[col] = all_pts[col].apply(lambda el: el['title'])
-            
+        pt_files = glob.glob(os.path.join(self.CONFIG['POINTS_ROOT'],name+'*'+'.parquet'))
+        all_pts = pd.concat([pd.read_parquet(f) for f in pt_files])
         all_pts['idx'] = range(len(all_pts))
         all_pts = all_pts.set_index('idx')
                 
         logger.info(f'Generated {len(all_pts)} points. Writing to Parquet at {os.path.join(self.CONFIG["POINTS_ROOT"],name+".parquet")}')
         
         all_pts.to_parquet(os.path.join(self.CONFIG['POINTS_ROOT'],name+'.parquet'))
+        
+        logger.info('DONE!')
             
             
     def _map_coverage(self, el):
@@ -240,19 +249,29 @@ class PointGenerator:
         utm_tile = el['S2_L1C_rec']['title'].split('_')[5][1:]
         satellite = el['S2_L1C_rec']['title'].split('_')[0]
         
-        if round(el['S2_L2A_rec']['coverage']*100)==100:
+        if type(el['S2_L2A_rec']['coverage'])==dict:
+            val=round(list(el['S2_L2A_rec']['coverage'].values())[0]*100)
+        else:
+            val=round(el['S2_L2A_rec']['coverage']*100)
+            
+        if val==100:
             coverage_str = '99'
         else:
-            coverage_str = str(int(np.round(el['S2_L2A_rec']['coverage']*100)))
+            coverage_str = str(int(val))
         
         return base+'_'.join([dd,utm_tile,coverage_str,satellite,'v1'])
     
     def _map_GEE_S2(self,el):
         base = 'projects/earthengine-public/assets/COPERNICUS/S2_SR/'
-        dt0 = el['S2_L2A_rec']['s2datatakeid'].split('_')[1]
+        
+        if type(el['S2_L2A_rec']['s2datatakeid'])==dict:
+            dt0 = list(el['S2_L2A_rec']['s2datatakeid'].values())[0].split('_')[1]
+        else:
+            dt0 = el['S2_L2A_rec']['s2datatakeid'].split('_')[1]
+        
         utm_tile = 'T'+el['S2_L2A_rec']['title'].split('_')[5][1:]
         
-        if dt.strptime(dt0,'%Y%m%dT%H%M%S')>dt(2019,11,1,0,0) or el['S2_L1C_rec']['datastripidentifier'].split('_')[-2][1:]==None:
+        if dt.strptime(dt0,'%Y%m%dT%H%M%S')>dt(2019,11,1,0,0) or el['S2_L1C_rec']['datastripidentifier']==None:
             # changed the manifest - now need to get this some other way.
             # either download the whole index.csv.gz or use big query, etc.
             tt = re.search(r'(\d).',utm_tile).group()
