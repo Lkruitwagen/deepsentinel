@@ -32,7 +32,7 @@ We are developing DeepSentinel open-source and make our training corpus and mode
 
 ## Acknowledgements
 
-We are extremely grateful for the ongoing support of [DescartesLabs Impact Science Programme](https://www.descarteslabs.com/impact_science/) and [Microsoft AI for Earth](https://www.microsoft.com/en-us/ai/ai-for-earth) programme. This work is also supported by Google Research Credits.
+We are extremely grateful for the ongoing support of [DescartesLabs Impact Science Programme](https://www.descarteslabs.com/impact_science/) and [Microsoft AI for Earth](https://www.microsoft.com/en-us/ai/ai-for-earth) programme. This work is also supported by [Google Research Credits](https://edu.google.com/programs/credits/research/?modal_active=none) and also uses [Google Earth Engine](https://earthengine.google.com/).
 
 ## Installation
 
@@ -88,9 +88,6 @@ To use your own google cloud storage bucket with _DeepSentinel_, create your own
 
 To use your own Azure cloud storage account with _DeepSentinel_, create your own storage account, and then obtain a connection string for it, copying `Connection string` of `key1` under the Access keys tab for your storage account. Save the string in a txt file and edit the path to your connection string file in `CONFIG.yaml` and `bin/make_config.py`.
 
-
-
-
     
 ## Useage
 
@@ -142,9 +139,38 @@ _DeepSentinel_ uses the raw Copernicus data catalogues to generate coincident S1
 
     python cli.py generate-points 2018-01-01 20000 20k_demodata
 
-The orbits of S1 and S2 are coincident on a 12-day frequency, so _DeepSentinel_ generates a fixed number of points in each 12-day period. An `--end-date=YYYY-mm-dd` can optionally be specified instead of the number of orbits. The geographic area for generated points can be constrained using `--iso2=<comma-separated-list-of-iso_A2-codes>. An alternative configuration file can also be specified. For example:
+The orbits of S1 and S2 are coincident on a 12-day period, so _DeepSentinel_ generates a fixed number of points in each 12-day period. An `--end-date=YYYY-mm-dd` can optionally be specified instead of the number of orbits. The geographic area for generated points can be constrained using `--iso2=<comma-separated-list-of-iso_A2-codes>. An alternative configuration file can also be specified. For example:
 
     python cli.py generate-points 2018-01-01 20000 20k_altdata --end-date=2018-07-01 --iso2=CA,US,MX --conf=/my_path/MY_CONFIG.yaml
+    
+    
+#### geopandas-to-points
+
+For some workflows, uniform imagery over a specific geography might be of interest. To generate points sampled to cover a vector GeoDataFrame, use `python cli.py geopandas-to-points`:
+
+    Usage: cli.py geopandas-to-points [OPTIONS] GDF_PATH NAME START_DATE END_DATE
+
+      Seed points for a new dataset.
+
+      PARAMETERS
+      ----------
+      GDF_PATH: str
+          The path to the GeoPandas GeoDataFrame to load (with gpd.read_file).
+
+      NAME: str
+          The name of the new dataset.
+
+      START_DATE: str
+          The start date for data collection in the form YYYY-mm-dd.
+
+      END_DATE: str
+          The end date for data collection in the form YYYY-mm-dd.
+
+    Options:
+      --conf TEXT  path to DATA_CONFIG.yaml
+      --help       Show this message and exit.
+      
+Points will be spaced evenly to generate samples at a specific `patch_size` and `resolution` specified in `conf/DATA_CONFIG.yaml`.
     
     
 #### generate-samples
@@ -177,9 +203,27 @@ To download imagery associated with a dataset of S1-S2 pairs, use `python cli.py
       --conf TEXT  path to DATA_CONFIG.yaml
       --help       Show this message and exit.
 
-
-
 #### train
+
+Begin training. DeepSentinel implements a training curriculum with two steps: Pretraining, and finetuning. Without any additional parameters, `python cli.py train` will proceed to train and finetune a model using default configurations contained in `conf/ML_CONFIG.yaml`.
+
+    Usage: cli.py train [OPTIONS]
+
+      Run the model training scripts with Sacred and a YAML config file.
+
+      Any additional parameters can also be specified:
+      --device=cuda
+
+      Nested parameters can be specified like so: 
+      --model_config--VAE--z_dim=16
+      --model_config--VAE={\"z_dim\":16}
+
+    Options:
+      --conf TEXT       path to ML_CONFIG.yaml
+      --observers TEXT  Comma-separated list of Sacred observers to add to experiment,
+                        from ["local","gcp"]
+      --name TEXT
+      --help            Show this message and exit.
 
 
 
