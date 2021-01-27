@@ -188,7 +188,7 @@ To download imagery associated with a dataset of S1-S2 pairs, use `python cli.py
 
 To use tensorboard to view experiments, run:
 
-    tensorboard --logdir /path/to/deepsentinel/experiments/tensorboard
+    tensorboard --logdir $PWD/experiments/tensorboard
     
 This should start tensorboard running, usually at `localhost:6006`. To view tensorboard in your browser, create a remote ssh tunnel to your machine:
 
