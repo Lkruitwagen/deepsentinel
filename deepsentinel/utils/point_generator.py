@@ -5,6 +5,7 @@ import os, yaml, time, random, json, glob, logging, re
 from tqdm import tqdm
 from datetime import datetime as dt
 from datetime import timedelta
+from math import floor
 
 import pandas as pd
 import geopandas as gpd
@@ -147,7 +148,7 @@ class PointGenerator:
             S2_L2A_df['intersection_geom'] = S2_L2A_df.apply(lambda row: row['geometry'].intersection(wkt.loads(row['footprint'])), axis=1)
             
             # get coverage
-            S2_L2A_df['coverage'] = S2_L2A_df.apply(lambda row: area(geometry.mapping(row['intersection_geom']))/area(geometry.mapping(wkt.loads(row['footprint']))), axis=1)
+            S2_L2A_df['coverage'] = S2_L2A_df.apply(lambda row: area(geometry.mapping(row['intersection_geom']))/area(geometry.mapping(row['geometry'])), axis=1)
             #print ('got coverage',time.time()-tic)
             #S2_L2A_df['naive_coverage'] = S2_L2A_df.apply(lambda row: row['intersection_geom'].area/wkt.loads(row['footprint']).area, axis=1)
             
@@ -199,8 +200,9 @@ class PointGenerator:
             # format for disk
             pts['bbox_wgs'] = pts['bbox_wgs'].apply(pygeos.io.to_wkt)
             for col in ['S1_rec', 'S2_L2A_rec','S2_L1C_rec']:
-                pts[col] = pts[col].apply(lambda el: el['title'])
+                pts[col] = pts[col].apply(lambda el: json.dumps(el['title']))
             
+            print (pts)
             pts.to_parquet(os.path.join(self.CONFIG['POINTS_ROOT'],f'{name}_{orbit}.parquet'))
                   
         logger.info('Got all points. Compiling')
@@ -250,9 +252,9 @@ class PointGenerator:
         satellite = el['S2_L1C_rec']['title'].split('_')[0]
         
         if type(el['S2_L2A_rec']['coverage'])==dict:
-            val=round(list(el['S2_L2A_rec']['coverage'].values())[0]*100)
+            val=floor(list(el['S2_L2A_rec']['coverage'].values())[0]*100)
         else:
-            val=round(el['S2_L2A_rec']['coverage']*100)
+            val=floor(el['S2_L2A_rec']['coverage']*100)
             
         if val==100:
             coverage_str = '99'
@@ -269,7 +271,10 @@ class PointGenerator:
         else:
             dt0 = el['S2_L2A_rec']['s2datatakeid'].split('_')[1]
         
-        utm_tile = 'T'+el['S2_L2A_rec']['title'].split('_')[5][1:]
+        if type(el['S2_L2A_rec']['title'])==dict:
+            utm_tile = 'T'+list(el['S2_L2A_rec']['title'].values())[0].split('_')[5][1:]
+        else:
+            utm_tile = 'T'+el['S2_L2A_rec']['title'].split('_')[5][1:]
         
         if dt.strptime(dt0,'%Y%m%dT%H%M%S')>dt(2019,11,1,0,0) or el['S2_L1C_rec']['datastripidentifier']==None:
             # changed the manifest - now need to get this some other way.
@@ -278,7 +283,10 @@ class PointGenerator:
             big_grid = utm_tile.replace(tt,'')[1:][0]
             little_grid = utm_tile.replace(tt,'')[1:][1:]
             
-            path=os.path.join('L2','tiles',tt,big_grid,little_grid,el['S2_L2A_rec']['filename'],'DATASTRIP')
+            if type(el['S2_L2A_rec']['filename'])==dict:
+                path=os.path.join('L2','tiles',tt,big_grid,little_grid,list(el['S2_L2A_rec']['filename'].values())[0],'DATASTRIP')
+            else:
+                path=os.path.join('L2','tiles',tt,big_grid,little_grid,el['S2_L2A_rec']['filename'],'DATASTRIP')
             
             granule_blobs = [blob.name for blob in self.client.list_blobs(self.bucketname,prefix=path)]
             

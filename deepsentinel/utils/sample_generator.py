@@ -23,7 +23,7 @@ logger = logging.getLogger(__name__)
 class SampleDownloader:
     
     
-    def __init__(self, version, destinations, use_dl, use_gee, conf=False, multiprocess=False):
+    def __init__(self, version, destinations, conf=False, multiprocess=False):
 
         # load config, credentials
         if not conf:
@@ -40,12 +40,9 @@ class SampleDownloader:
         
         self.destinations = destinations
         
-        self.use_dl = use_dl
-        
-        self.use_gee = use_gee
         
         # load the point df
-        self.pts = pd.read_parquet(os.path.join(self.CONFIG['DATA_ROOT'], 'pts', self.version+'.parquet'))
+        self.pts = pd.read_parquet(os.path.join(self.CONFIG['POINTS_ROOT'], self.version+'.parquet'))
         
         # make directory
         if not os.path.exists(os.path.join(self.CONFIG['DATA_ROOT'],self.version)):
@@ -77,6 +74,10 @@ class SampleDownloader:
 
             )
 
+        #for arg in args:
+        #DL_downloader(*args[0])
+        #    input('-next-->')
+            
         with mp.Pool(self.CONFIG['N_workers']) as P:
             results = P.starmap(DL_downloader, args)
 
@@ -167,7 +168,7 @@ class SampleDownloader:
         
         
 if __name__=="__main__":
-    downloader=SampleDownloader(version='DEMO_unlabelled', destinations=['gcp','azure'], use_dl=True, use_gee=False)
+    downloader=SampleDownloader(version='DEMO_unlabelled', destinations=['gcp','azure'])
 
     downloader.download_samples_DL()
     downloader.download_samples_GEE()

@@ -1,5 +1,5 @@
 CATALOG_ROOT: /home/jupyter/deepsentinel/data/catalog
-DATA_ROOT: /home/jupyter/deepsentinel/data
+DATA_ROOT: /data
 DL:
   S1_bands:
   - vv
@@ -44,7 +44,7 @@ GEE:
   - B11
   - B12
 NE_ROOT: /home/jupyter/deepsentinel/data
-N_workers: 3
+N_workers: 4
 POINTS_ROOT: /home/jupyter/deepsentinel/data/pts
 azure_path: /home/jupyter/deepsentinel/azure-connectionstring.txt
 day_offset: 3

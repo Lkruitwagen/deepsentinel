@@ -48,7 +48,7 @@ def generate_points(name, n_points, start_date, iso2, end_date, n_orbits, conf):
         raise ValueError('Ensure start_date is in the correct format, YYYY-mm-dd')
     if end_date!=None:
         try:
-            end_date = df.strptime(end_date,'%Y-%m-%d')
+            end_date = dt.strptime(end_date,'%Y-%m-%d')
         except:
             raise ValueError('Ensure end_date is in the correct format, YYYY-mm-dd')
                    
@@ -75,14 +75,69 @@ def generate_points(name, n_points, start_date, iso2, end_date, n_orbits, conf):
         
     logger.info(f'Running generator for {name} from {start_date.isoformat()} for {n_orbits} orbits with {pts_per_orbit} points per orbit')
     generator.main_generator(start_date, n_orbits, pts_per_orbit,name)
+    
+    
+@cli.command()
+@click.option('--conf', default=os.path.join(os.getcwd(),'conf','DATA_CONFIG.yaml'), help='path to DATA_CONFIG.yaml')
+@click.argument('gdf_path', type=str)
+@click.argument('name', type=str)
+@click.argument('start_date', type=str)
+@click.argument('end-date', type=str)
+def geopandas_to_points(gdf_path, name, start_date, end_date, conf):
+    """
+    Seed points for a new dataset.
+    
+    \b
+    PARAMETERS
+    ----------
+    GDF_PATH: str
+        The path to the GeoPandas GeoDataFrame to load (with gpd.read_file).
+        
+    NAME: str
+        The name of the new dataset.
+        
+    START_DATE: str
+        The start date for data collection in the form YYYY-mm-dd.
+        
+    END_DATE: str
+        The end date for data collection in the form YYYY-mm-dd.
+    """
+    
+    from deepsentinel.utils.gdf2points import GDF2Points
+    logger = logging.getLogger('POINTS_FROM_GDF')
+
+    # error check date formats
+    try:
+        start_date = dt.strptime(start_date,'%Y-%m-%d')
+    except:
+        raise ValueError('Ensure start_date is in the correct format, YYYY-mm-dd')
+    try:
+        end_date = dt.strptime(end_date,'%Y-%m-%d')
+    except:
+        raise ValueError('Ensure end_date is in the correct format, YYYY-mm-dd')
+                   
+    logger.info('Generating points with:')
+    logger.info(f'GDF_PATH:{gdf_path}')
+    logger.info(f'NAME:{name}')
+    logger.info(f'START_DATE:{start_date}')
+    logger.info(f'END_DATE:{end_date}')
+    logger.info(f'conf:{conf}')
+    
+    logger.info('Initialising generator')
+    generator=GDF2Points(conf=conf)
+    
+
+        
+    logger.info(f'Running generator for {name} sampling tiles for {gdf_path} from {start_date.isoformat()} to {end_date.isoformat()}')
+    generator.generate_from_gdf(gdf_path, start_date, end_date, name)
 
     
 @cli.command()
 @click.option('--conf', default=os.path.join(os.getcwd(),'conf','DATA_CONFIG.yaml'), help='path to DATA_CONFIG.yaml')
-@click.argument('destinations', type=str)
-@click.argument('sources', type=str)
 @click.argument('name', type=str)
-def generate_samples(name, sources, denstinations):
+@click.argument('sources', type=str)
+@click.argument('destinations', type=str)
+def generate_samples(name, sources, destinations, conf):
     """
     Download imagery samples for a seeded dataset.
     
@@ -106,19 +161,16 @@ def generate_samples(name, sources, denstinations):
             azure: saved to an Azure Cloud Storage Container
     """
     
-    from deepsentinel.utils.sample_generator import SampleGenerator
+    from deepsentinel.utils.sample_generator import SampleDownloader
     logger = logging.getLogger('SAMPLE_IMAGERY')
-    
-    if True: logger.info('one liner!')
-
     
     # error check destinations and sources
     for source in sources.split(','):
         assert (source in ['dl','gee','osm','clc'])
     sources = sources.split(',')
-    for dest in destinations:
+    for dest in destinations.split(','):
         assert (dest in ['local','gcp','azure'])
-    desintations = destinations.split(',')
+    destinations = destinations.split(',')
                        
     logger.info('Sampling imagery with:')
     logger.info(f'NAME:{name}')
@@ -128,12 +180,20 @@ def generate_samples(name, sources, denstinations):
     
     
     
-    #downloader=SampleDownloader(version='DEMO_unlabelled', destinations=destinations)
+    downloader=SampleDownloader(version=name, destinations=destinations, conf=conf)
+    if 'dl' in sources:
+        logger.info('doing dl')
+        downloader.download_samples_DL()
+    if 'gee' in sources:
+        logger.info('gee')
+        downloader.download_samples_GEE()
+    if 'lc' in sources:
+        downloader.download_samples_LC()
+    if 'osm' in sources:
+        downloader.download_samples_OSM()
+        
+    logger.info('DONE!')
 
-    #downloader.download_samples_DL()
-    #downloader.download_samples_GEE()
-    #downloader.download_samples_LC()
-    #downloader.download_samples_OSM()
 
     
 @cli.command(
@@ -178,8 +238,15 @@ def train(ctx, conf, observers, name):
         
         # cast vv to the type from the nested config
         vv_type = type(get_from_dict(CONFIG,kks))   
+        #override special cases
         if vv_type==dict:
             vv = json.loads(vv)
+        elif kks[0] in ['pretrain', 'finetune','load_run'] and vv=='None':
+            vv = None
+        elif kks[0]=='load_run':
+            vv = int(vv)
+        elif kks[0] in ['pretrain','finetune']:
+            vv = str(vv)
         else:
             vv = vv_type(vv)
         

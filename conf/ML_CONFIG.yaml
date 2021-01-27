@@ -1,12 +1,19 @@
 device: cuda
 encoder: basic_bottleneck
 encoder_layers:
-  VAE:
-    meow: cat
+  basic_bottleneck:
+  - encoder.net.0.weight
+  - encoder.net.0.bias
+  - encoder.net.2.weight
+  - encoder.net.2.bias
+  - encoder.net.4.weight
+  - encoder.net.4.bias
+  - encoder.net.6.weight
+  - encoder.net.6.bias
 encoder_params:
   basic_bottleneck:
     input_channels: 5
-finetune: null
+finetune: synthetic_rgb
 finetune_config:
   synthetic_rgb:
     BATCH_SIZE: 64
@@ -14,13 +21,31 @@ finetune_config:
     EPOCHS: 10
     LOG_INTERVAL: 4
     LR: 5.0e-05
+finetune_loader_config:
+  synthetic_rgb:
+    bands:
+    - B2
+    - B3
+    - B4
+    - VV
+    - VH
+    channel_stats: /home/jupyter/deepsentinel/data/channel_stats/DEMO_unlabelled_GEE.json
+    data_config: /home/jupyter/deepsentinel/conf/DATA_CONFIG.yaml
+    data_dir: /data/DEMO_unlabelled/
+    patch_size: 128
+    source: GEE
+finetune_model_config:
+  synthetic_rgb:
+    h_dim: 9216
+    image_channels: 5
+    z_dim: 32
 load_run: null
 pretrain: VAE
 pretrain_config:
   VAE:
-    BATCH_SIZE: 32
+    BATCH_SIZE: 128
     DATALOADER_WORKERS: 6
-    EPOCHS: 2
+    EPOCHS: 20
     LOG_INTERVAL: 10
     LR: 5.0e-05
 pretrain_loader_config:
@@ -46,3 +71,20 @@ sacred:
   gcp_bucket: deepsentinel-models
   local: /home/jupyter/deepsentinel/experiments/sacred
 verbose: true
+vis_params:
+  VAE:
+    IMAGE_SAMPLES: 10
+    RGB_BANDS:
+    - B4
+    - B3
+    - B2
+  synthetic_rgb:
+    IMAGE_SAMPLES: 10
+    RGB_BANDS:
+    - B4
+    - B3
+    - B2
+    SYNTH_RGB:
+    - VV
+    - VV
+    - VH

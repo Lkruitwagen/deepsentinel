@@ -1,7 +1,7 @@
 import os, yaml
 
 CONFIG = dict(
-    DATA_ROOT = os.path.join(os.getcwd(),'data'),       # root directory for data
+    DATA_ROOT = '/data',       # root directory for data
     NE_ROOT = os.path.join(os.getcwd(),'data'),       # root directory for data
     CATALOG_ROOT = os.path.join(os.getcwd(),'data','catalog'), # root directory for catalog data
     POINTS_ROOT = os.path.join(os.getcwd(),'data','pts'),      # root directory for points

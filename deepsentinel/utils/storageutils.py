@@ -73,6 +73,13 @@ class GCPClient:
                 if not os.path.exists(fpath):
                     os.makedirs(fpath)
                 blob.download_to_filename(os.path.join(dest_dir, blob.name))
+                
+                
+    def check(self, f):
+        
+        idx = os.path.split(f)[1].split('_')[0]
+        
+        return self.bucket.blob(os.path.join(self.version, idx, os.path.split(f)[1])).exists()
         
         
         
@@ -127,3 +134,8 @@ class AzureClient:
         
         with open(f, "rb") as data:
             blob.upload_blob(data, overwrite=True)
+            
+    def check(self,f):
+        idx = os.path.split(f)[1].split('_')[0]
+        
+        blob = self.client.get_blob_client(container=self.version, blob=os.path.join(idx, os.path.split(f)[1]))

@@ -1,4 +1,4 @@
-import glob, yaml, os, json
+import glob, yaml, os, json, copy
 
 import numpy as np
 import pandas as pd
@@ -52,7 +52,8 @@ class VAEDataloader(Dataset):
         else:
             self.bands = [{'idx':idx,'band':band,'const':'S2'} for idx, band in enumerate(self.data_config[source]['S2_bands'])] \
                          + [{'idx':idx,'band':band, 'const':'S1'} for idx, band in enumerate(self.data_config[source]['S1_bands'])]
-
+            
+        self.output_bands = copy.copy(self.bands)
         
         assert (len(self.bands)>0), 'At least one band must be included.'
             

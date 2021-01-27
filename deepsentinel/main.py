@@ -10,7 +10,7 @@ from torchsummary import summary
 from deepsentinel.exp import ex, EX_NAME
 from deepsentinel.models.models import models
 from deepsentinel.models.encoders import encoders
-from deepsentinel.train import pretrain_loop, train_synthrgb, train_lc, test
+from deepsentinel.train import pretrain_loop, finetune_synthrgb, finetune_lc, test
 from deepsentinel.dataloaders import dataloaders
 
 """A script to instantiate the experiment object"""
@@ -24,7 +24,7 @@ ex = Experiment(EX_NAME)
 
 
 @ex.automain
-def main(pretrain, finetune, load_run, pretrain_config, pretrain_model_config, encoder, encoder_params, pretrain_loader_config, encoder_layers, device, verbose, _log, _run):
+def main(pretrain, finetune, load_run, encoder, encoder_params, encoder_layers, pretrain_config, pretrain_model_config, pretrain_loader_config,finetune_config, finetune_model_config, finetune_loader_config, vis_params, device, verbose, _log, _run):
     """
     The main loop that includes pretraining, training, testing, and i/o for tensorboard and Sacred
     
@@ -39,7 +39,7 @@ def main(pretrain, finetune, load_run, pretrain_config, pretrain_model_config, e
     base_sacred_path = os.path.join(os.getcwd(), 'experiments', 'sacred', _run._id)
     
     
-    if pretrain:
+    if pretrain!=None and pretrain!='load':
         _log.info('Initialising pretrain model and sending to device')
         
         pretrain_model = models[pretrain](encoder, encoder_params[encoder], **pretrain_model_config[pretrain]).to(device)
@@ -58,7 +58,7 @@ def main(pretrain, finetune, load_run, pretrain_config, pretrain_model_config, e
             pretrain_dataset, 
             batch_size=pretrain_config[pretrain]['BATCH_SIZE'], 
             shuffle=False,
-            num_workers=pretrain_config[pretrain]['DATALOADER_WORKERS'], 
+            num_workers=pretrain_config[pretrain]['DATALOADER_WORKERS']
         )
 
         _log.info('Call the pretraining')
@@ -67,6 +67,8 @@ def main(pretrain, finetune, load_run, pretrain_config, pretrain_model_config, e
                  optimizer, 
                  writer,
                  pretrain_config[pretrain],  
+                 pretrain_loader_config[pretrain]['channel_stats'],
+                 vis_params[pretrain],
                  device, 
                  verbose)
         
@@ -82,22 +84,37 @@ def main(pretrain, finetune, load_run, pretrain_config, pretrain_model_config, e
             
     
     if finetune:
+        _log.info('~~~FINETUNING~~~')
         _log.info(f'Finetuning for {finetune}')
         
-        finetune_model = models[finetune](**finetune_config[finetune]).to(device)
+        finetune_model = models[finetune](encoder, encoder_params[encoder], **finetune_model_config[finetune]).to(device)
         
-        if load_run:
+        if load_run and pretrain=='load':
             _log.info(f'Loading pretained encoder {load_run}')
-            # do the specific layers of the model
-            finetune_model.load_state_dict(torch.load(os.path.join(base_sacred_path, 'pretrained_model.pth')))
-            #optimizer.load_state_dict(torch.load(os.path.join(base_sacred_path, load_run,'pretrained_optimizer.pth')))
+            
+            # load a previous pretrained model
+            pretrained_dict = torch.load(os.path.join(os.getcwd(), 'experiments', 'sacred', str(load_run), 'pretrained_model.pth'))
+            
+        else:
+            _log.info(f'Loading pretained encoder {_run._id}')
+            
+            # load this run's pretrained model
+            pretrained_dict = torch.load(os.path.join(os.getcwd(), 'experiments', 'sacred', str(_run._id), 'pretrained_model.pth'))
+            
+        # filter the keys needed for the encoder
+        pretrained_dict = {kk:vv for kk,vv in pretrained_dict.items() if kk in encoder_layers[encoder]}
+        # get the state_dict for the finetuning model
+        model_dict = finetune_model.state_dict()
+        # update the state dict
+        model_dict.update(pretrained_dict)
+        # load the updated model_dict
+        finetune_model.load_state_dict(model_dict)
     
-        _log.info('~~~FINETUNING~~~')
         _log.info('instantiate the optimizer')
-        optimizer = torch.optim.Adam(params=pretrain_model.parameters(), lr=finetune_config[finetune]['LR'])
+        optimizer = torch.optim.Adam(params=finetune_model.parameters(), lr=finetune_config[finetune]['LR'])
         
         _log.info('instantiate the dataloader')
-        finetune_dataset = dataloaders[finetune](**pretrain_loader_config[finetune])
+        finetune_dataset = dataloaders[finetune](**finetune_loader_config[finetune])
         
         finetune_loader = DataLoader(
             finetune_dataset, 
@@ -106,47 +123,30 @@ def main(pretrain, finetune, load_run, pretrain_config, pretrain_model_config, e
             num_workers=finetune_config[finetune]['DATALOADER_WORKERS'], 
         )
 
-        _log.info('Call the finetuning')
-        finetune_loop(finetune_model, 
-                 finetune_loader, 
-                 optimizer, 
-                 writer,
-                 finetune_config[finetune],  
-                 device, 
-                 verbose)
+        _log.info('Call the finetuning') # can abstract this if necessary
+        if finetune=='synthetic_rgb':
+            print ('device',device)
+            print ('verbose',verbose)
+            finetune_synthrgb(finetune_model, 
+                     finetune_loader, 
+                     optimizer, 
+                     writer,
+                     finetune_config[finetune],  
+                     finetune_loader_config[finetune]['channel_stats'],
+                     vis_params[finetune],
+                     device, 
+                     verbose)
+        elif finetune=='landcover':
+            finetune_lc(finetune_model, 
+                     finetune_loader, 
+                     optimizer, 
+                     writer,
+                     finetune_config[finetune],  
+                     finetune_loader_config[finetune]['channel_stats'],
+                     vis_params[finetune],
+                     device, 
+                     verbose)
         
         _log.info('save the model')
         ex.add_artifact(filename=os.path.join(os.getcwd(), 'tmp', 'finetune_model.pth'), name='finetuned_model.pth')
         ex.add_artifact(filename=os.path.join(os.getcwd(), 'tmp', 'finetune_optimizer.pth'), name='finetuned_optimizer.pth')
-        
-        
-            
-            
-
-    
-    
-    
-    
-    
-    
-    
-    # 64  -> 2x2
-    # 96  -> 4x4
-    # 128 -> 6x6
-    # patch_size/2/2/2/2-2 -> final_patch; final_patch**2 * 256
-
-        
-    ## obtain the (now) pre-trained encoder layers
-    
-    """
-    pretrained_dict = ...
-    model_dict = model.state_dict()
-
-    # 1. filter out unnecessary keys
-    pretrained_dict = {k: v for k, v in pretrained_dict.items() if k in encoder_layers[model_spec]}
-    # 2. overwrite entries in the existing state dict
-    model_dict.update(pretrained_dict) 
-    # 3. load the new state dict
-    model.load_state_dict(model_dict)
-    encoder = model
-    """
