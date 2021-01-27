@@ -1,4 +1,5 @@
 import os, json, yaml, zipfile, geojson, urllib, re, io, logging
+from pathlib import Path
 import pyproj
 from functools import partial
 from shapely import geometry, ops
@@ -53,8 +54,48 @@ class SampleDownloader:
             # Azure cannot into make container in multiprocessing
             from deepsentinel.utils.storageutils import AzureClient
             AzureClient(self.CONFIG['azure_path'], version, make_container=True)
+       
+    """
+    def filter_pts(self, src):
         
-
+        check_pts = pts.copy()
+         # only run points not run yet
+        if 'gcp' in self.destinations:
+            
+            check_pts['name_root'] = check_pt.apply(lambda pt:
+                                                    os.path.join(
+                                                        self.CONFIG['DATA_ROOT'],
+                                                        version,
+                                                        str(pt.name),
+                                                        '_'.join(
+                                                            [str(idx),
+                                                             src.upper(),
+                                                             pt[f'{src.upper()}_S2'].split(':')[2][0:10],
+                                                             str(pt['lon']), 
+                                                             str(pt['lat'])
+                                                            ]
+                                                        )
+                                                    )
+       
+            
+            gcp_client = GCPClient(self.CONFIG['gcp_credentials_path'],self.CONFIG['gcp_storage_bucket'],self.version)
+            done_blobs = [bb.name for bb in sc.client.list_blobs(CONFIG['gcp_storage_bucket'], prefix=self.version)]
+            
+            pd.DataFrame()
+            all_blobnames = [bb.name for bb in gcp_client.list_blobs()]
+        
+        if 'local' in self.destinations:
+        
+        if 'azure' in destinations:
+            raise NotImplementedError
+            
+            
+        azure_client = AzureClient(CONFIG['azure_path'], version, make_container=False)
+        
+        [bb for bb in self.client.list_blobs(self.bucket,prefix=source_dir)]
+        
+    """
+        
             
             
     def download_samples_DL(self):
@@ -89,22 +130,39 @@ class SampleDownloader:
         
     def download_samples_GEE(self):
         
+        # get tiles
         if os.path.exists(os.path.join(self.CONFIG['DATA_ROOT'],self.version, 'tiles.json')):
             TLs = json.load(open(os.path.join(self.CONFIG['DATA_ROOT'],self.version, 'tiles.json'),'r'))
+        elif 'local' in self.destinations:
+            # try loading tiles from local
+            print ('loading tls from local')
+            TLs = {int(path.parent.name):json.load(path.open()) for path in Path(os.path.join(self.CONFIG['DATA_ROOT'], self.version)).rglob('*_tile.json')}
+            for kk in self.pts.index.values:
+                assert (kk in TLs.keys()), f'{kk} not in tiles'
+            print (f'got TLS, lenkeys: {len(TLs.keys())}')
         else:
             TLs = None
             
+            
+        # get any log and filter
+        if os.path.exists(os.path.join(os.getcwd(),'logs',f'{self.version}_gee.log')):
+            with open(os.path.join(os.getcwd(),'logs',f'{self.version}_gee.log'),'r') as f:
+                lines = f.readlines()
+            done_idx = list(set([int(el) for el in lines]))
+        else:
+            done_idx = []
+        
         args = []
-        step = (len(self.pts)//self.CONFIG['N_workers'])+1
+        step = (len(self.pts.loc[~self.pts.index.isin(done_idx)])//self.CONFIG['N_workers'])+1
         
         for ii_w in range(self.CONFIG['N_workers']):
             args.append(
                 (self.version,
-                 self.pts.iloc[ii_w*step:(ii_w+1)*step,:],
-                 self.pts.iloc[ii_w*step:(ii_w+1)*step,:].index.values,
+                 self.pts.loc[~self.pts.index.isin(done_idx)].iloc[ii_w*step:(ii_w+1)*step,:],
+                 self.pts.loc[~self.pts.index.isin(done_idx)].iloc[ii_w*step:(ii_w+1)*step,:].index.values,
                  self.CONFIG,
                  ii_w,
-                 {str(kk):TLs[str(kk)] for kk in self.pts.iloc[ii_w*step:(ii_w+1)*step,:].index.values},
+                 {str(kk):TLs[kk] for kk in self.pts.loc[~self.pts.index.isin(done_idx)].iloc[ii_w*step:(ii_w+1)*step,:].index.values},
                  self.destinations
                 )
             )

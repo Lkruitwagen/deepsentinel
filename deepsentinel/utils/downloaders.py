@@ -226,10 +226,11 @@ def DL_downloader(version, pts, ii_ps, CONFIG, mp_idx, destinations):
         if not os.path.exists(os.path.join(CONFIG['DATA_ROOT'], version,str(idx))):
             os.makedirs(os.path.join(CONFIG['DATA_ROOT'], version,str(idx)))
             
+        print (f'checking pt {idx}...', end='')
             
         # get the name
         if 'local' in destinations:
-                name_root = os.path.join(CONFIG['DATA_ROOT'],version,str(idx),'_'.join([str(idx),'DL',pt['DL_S2'].split(':')[2][0:10], str(pt['lon']), str(pt['lat'])]))
+            name_root = os.path.join(CONFIG['DATA_ROOT'],version,str(idx),'_'.join([str(idx),'DL',pt['DL_S2'].split(':')[2][0:10], str(pt['lon']), str(pt['lat'])]))
 
         else:
             name_root = os.path.join(CONFIG['DATA_ROOT'],'tmp','_'.join([str(idx),'DL',pt['DL_S2'].split(':')[2][0:10], str(pt['lon']), str(pt['lat'])]))
@@ -249,7 +250,7 @@ def DL_downloader(version, pts, ii_ps, CONFIG, mp_idx, destinations):
             for ext in ['_S2arr.npz','_S2meta.json','_S1arr.npz','_S1meta.json','_tile.json','_S2thumb.png','_S1thumb.png']:
                 checkers.append(os.path.exists(name_root+ext))
             
-        if not product(checkers):
+        if not np.product(checkers):
             # if all checkers true, do everything            
             
             # get the tile
@@ -352,14 +353,19 @@ def DL_downloader(version, pts, ii_ps, CONFIG, mp_idx, destinations):
 
 
                 print (f'done pt {idx}, S2_min: {S2_arr.min()}, S2_max: {S2_arr.max()}, S1_min: {S1_arr.min()}, S1_max: {S1_arr.max()}, {pt["DL_S2"]},{pt["lon"]},{pt["lat"]}')
+                with open(os.path.join(os.getcwd(),'logs',f'{version}_dl.log'), "a") as f:
+                    f.write(f"{idx}\n")
+                
             except Exception as e:
                 print ('Error!')
                 print (e)
 
-
             TLs[idx] = dict(tile)
         else:
-            print ('got pt')
+            print (f'got pt {idx} already')
+            with open(os.path.join(os.getcwd(),'logs',f'{version}_dl.log'), "a") as f:
+                f.write(f"{idx}\n")
+                          
     
     return TLs, ii_ps
                 
@@ -422,127 +428,155 @@ def GEE_downloader(version, pts, ii_ps, CONFIG, mp_idx, TLs, destinations):
         return np.dstack([arr[el] for el in arr.dtype.names]).astype(np.float32)
         
     for idx, pt in pts.iterrows():
+                      
+                      
+        if 'local' in destinations:
+            name_root = os.path.join(CONFIG['DATA_ROOT'],version,str(idx),'_'.join([str(idx),'GEE',pt['DL_S2'].split(':')[2][0:10], str(pt['lon']), str(pt['lat'])]))
+        else:
+            name_root = os.path.join(CONFIG['DATA_ROOT'],'tmp','_'.join([str(idx),'GEE',pt['DL_S2'].split(':')[2][0:10], str(pt['lon']), str(pt['lat'])]))
+
+                      
+        # check the work done and skip if necessary
+        checkers = []
+        if 'gcp' in destinations:
+            for ext in ['_S2arr.npz','_S2meta.json','_S1arr.npz','_S1meta.json','_tile.json','_S2thumb.png','_S1thumb.png']:
+                checkers.append(gcp_client.check(name_root+ext))
+
+        if 'azure' in destinations:
+            for ext in ['_S2arr.npz','_S2meta.json','_S1arr.npz','_S1meta.json','_tile.json','_S2thumb.png','_S1thumb.png']:
+                checkers.append(azure_client.check(name_root+ext))
+
+        if 'local' in destinations:
+            for ext in ['_S2arr.npz','_S2meta.json','_S1arr.npz','_S1meta.json','_tile.json','_S2thumb.png','_S1thumb.png']:
+                checkers.append(os.path.exists(name_root+ext))
+            
+        if not np.product(checkers):
+                      
         
-        try:
-        
-            # make the path
-            if not os.path.exists(os.path.join(CONFIG['DATA_ROOT'], version,str(idx))):
-                os.makedirs(os.path.join(CONFIG['DATA_ROOT'], version,str(idx)))
+            try:
+
+                # make the path
+                if not os.path.exists(os.path.join(CONFIG['DATA_ROOT'], version,str(idx))):
+                    os.makedirs(os.path.join(CONFIG['DATA_ROOT'], version,str(idx)))
 
 
-            tl_avail = str(idx) in TLs.keys() #) and np.prod([kk in TLs[str(idx)].keys() for kk in ['utm_zone','x_off','y_off']])
+                tl_avail = str(idx) in TLs.keys() #) and np.prod([kk in TLs[str(idx)].keys() for kk in ['utm_zone','x_off','y_off']])
 
-            #print (idx, tl_avail, pt['lon'],pt['lat'])
+                #print (idx, tl_avail, pt['lon'],pt['lat'])
 
-            # get UTM zone
-            if not tl_avail:
-                utm_zone = get_utm_zone(pt['lat'],pt['lon'])
+                # get UTM zone
+                if not tl_avail:
+                    utm_zone = get_utm_zone(pt['lat'],pt['lon'])
 
-                pt_wgs = geometry.Point(pt['lon'],pt['lat'])
+                    pt_wgs = geometry.Point(pt['lon'],pt['lat'])
 
-                # reprojection functions
-                proj_utm = pyproj.Proj(proj='utm',zone=utm_zone,ellps='WGS84')
-                reproj_wgs_utm = partial(pyproj.transform, PROJ_WGS, proj_utm)
-                reproj_utm_wgs = partial(pyproj.transform, proj_utm, PROJ_WGS)
+                    # reprojection functions
+                    proj_utm = pyproj.Proj(proj='utm',zone=utm_zone,ellps='WGS84')
+                    reproj_wgs_utm = partial(pyproj.transform, PROJ_WGS, proj_utm)
+                    reproj_utm_wgs = partial(pyproj.transform, proj_utm, PROJ_WGS)
 
-                # get utm pt
-                pt_utm = ops.transform(reproj_wgs_utm, pt_wgs)
+                    # get utm pt
+                    pt_utm = ops.transform(reproj_wgs_utm, pt_wgs)
 
-                # get utm bbox
-                bbox_utm = geometry.box(
-                    pt_utm.x-(CONFIG['patch_size']*CONFIG['resolution'])/2, 
-                    pt_utm.y-(CONFIG['patch_size']*CONFIG['resolution'])/2, 
-                    pt_utm.x+(CONFIG['patch_size']*CONFIG['resolution'])/2, 
-                    pt_utm.y+(CONFIG['patch_size']*CONFIG['resolution'])/2)
+                    # get utm bbox
+                    bbox_utm = geometry.box(
+                        pt_utm.x-(CONFIG['patch_size']*CONFIG['resolution'])/2, 
+                        pt_utm.y-(CONFIG['patch_size']*CONFIG['resolution'])/2, 
+                        pt_utm.x+(CONFIG['patch_size']*CONFIG['resolution'])/2, 
+                        pt_utm.y+(CONFIG['patch_size']*CONFIG['resolution'])/2)
 
-                # reproj to wgs
-                bbox_wgs = ops.transform(reproj_utm_wgs, bbox_utm)
+                    # reproj to wgs
+                    bbox_wgs = ops.transform(reproj_utm_wgs, bbox_utm)
 
-                x_off, y_off = bbox_utm.bounds[0], bbox_utm.bounds[1]
-                
-                if pt['lat']>0:
-                    UTM_EPSG = f'EPSG:{str(326)+str(utm_zone)}'
+                    x_off, y_off = bbox_utm.bounds[0], bbox_utm.bounds[1]
+
+                    if pt['lat']>0:
+                        UTM_EPSG = f'EPSG:{str(326)+str(utm_zone)}'
+                    else:
+                        UTM_EPSG = f'EPSG:{str(327)+str(utm_zone)}'
+
                 else:
-                    UTM_EPSG = f'EPSG:{str(327)+str(utm_zone)}'
-
-            else:
-                utm_zone = TLs[str(idx)]['properties']['zone']
-                x_off, y_off = TLs[str(idx)]['properties']['geotrans'][0], TLs[str(idx)]['properties']['geotrans'][3]
-                UTM_EPSG = TLs[str(idx)]['properties']['cs_code']
+                    utm_zone = TLs[str(idx)]['properties']['zone']
+                    x_off, y_off = TLs[str(idx)]['properties']['geotrans'][0], TLs[str(idx)]['properties']['geotrans'][3]
+                    UTM_EPSG = TLs[str(idx)]['properties']['cs_code']
 
 
-            #print ('utm_zone',utm_zone,TLs[str(idx)]['properties']['zone'])
-            #print ('x_off',x_off, TLs[str(idx)]['properties']['geotrans'][0])
-            #print ('y_off',y_off,TLs[str(idx)]['properties']['geotrans'][3])
-            #exit()
+                #print ('utm_zone',utm_zone,TLs[str(idx)]['properties']['zone'])
+                #print ('x_off',x_off, TLs[str(idx)]['properties']['geotrans'][0])
+                #print ('y_off',y_off,TLs[str(idx)]['properties']['geotrans'][3])
+                #exit()
 
+
+
+
+                S2_arr = _get_GEE_arr(
+                    session=session, 
+                    name=pt['GEE_S2'], 
+                    bands=CONFIG['GEE']['S2_bands'], 
+                    x_off=x_off, 
+                    y_off=y_off, 
+                    patch_size=CONFIG['patch_size'],
+                    crs_code=UTM_EPSG
+                )
+
+                S1_arr = _get_GEE_arr(
+                    session=session, 
+                    name=pt['GEE_S1'], 
+                    bands=CONFIG['GEE']['S1_bands'], 
+                    x_off=x_off, 
+                    y_off=y_off, 
+                    patch_size=CONFIG['patch_size'],
+                    crs_code=UTM_EPSG
+                )
+
+                if tl_avail:
+                    tile = TLs[str(idx)]
+                else:
+                    tile = None
+
+                GEE_meta = {
+                    'tile':tile,
+                    'S2_name':pt['GEE_S2'],
+                    'S1_name':pt['GEE_S1'],
+                    'S2_bands':CONFIG['GEE']['S2_bands'],
+                    'S1_bands':CONFIG['GEE']['S1_bands'],
+                    'x_off':x_off, 
+                    'y_off':y_off, 
+                    'patch_size':CONFIG['patch_size'], 
+                    'crs_code':UTM_EPSG,
+                }
+
+
+                np.savez(name_root+'_S2arr.npz', arr=S2_arr.astype(np.float32))
+                np.savez(name_root+'_S1arr.npz', arr=S1_arr.astype(np.float32))
+                json.dump(GEE_meta, open(name_root+'_meta.json','w'))
+
+                _save_thumbnail((S2_arr[:,:,(3,2,1)]/10000).clip(0,1), name_root+'_S2thumb.png')
+                _save_thumbnail((((np.stack([S1_arr[:,:,0],np.zeros(S1_arr.shape[0:2]),S1_arr[:,:,1]])).transpose([1,2,0])+np.abs(S1_arr.min()))/(S1_arr.max()-S1_arr.min())).clip(0,1), name_root+'_S1thumb.png')
+
+
+                if 'gcp' in destinations:
+                    for ext in ['_S2arr.npz','_meta.json','_S1arr.npz','_S2thumb.png','_S1thumb.png']:
+                        gcp_client.upload(name_root+ext)
+
+                if 'azure' in destinations:
+                    for ext in ['_S2arr.npz','_meta.json','_S1arr.npz','_S2thumb.png','_S1thumb.png']:
+                        azure_client.upload(name_root+ext)
+
+                if 'local' not in destinations:
+                    for ext in ['_S2arr.npz','_meta.json','_S1arr.npz','_S2thumb.png','_S1thumb.png']:
+                        os.remove(name_root+ext)
+
+                print (f'Done pt {idx}, S2_min: {S2_arr.min()}, S2_max: {S2_arr.max()}, S1_min: {S1_arr.min()}, S1_max: {S1_arr.max()}')
+                with open(os.path.join(os.getcwd(),'logs',f'{version}_gee.log'), "a") as f:
+                    f.write(f"{idx}\n")
+
+            except Exception as e:
+                print (f'Error pt {idx}: {e}')
             
-
-
-            S2_arr = _get_GEE_arr(
-                session=session, 
-                name=pt['GEE_S2'], 
-                bands=CONFIG['GEE']['S2_bands'], 
-                x_off=x_off, 
-                y_off=y_off, 
-                patch_size=CONFIG['patch_size'],
-                crs_code=UTM_EPSG
-            )
-
-            S1_arr = _get_GEE_arr(
-                session=session, 
-                name=pt['GEE_S1'], 
-                bands=CONFIG['GEE']['S1_bands'], 
-                x_off=x_off, 
-                y_off=y_off, 
-                patch_size=CONFIG['patch_size'],
-                crs_code=UTM_EPSG
-            )
-
-            if tl_avail:
-                tile = TLs[str(idx)]
-            else:
-                tile = None
-
-            GEE_meta = {
-                'tile':tile,
-                'S2_name':pt['GEE_S2'],
-                'S1_name':pt['GEE_S1'],
-                'S2_bands':CONFIG['GEE']['S2_bands'],
-                'S1_bands':CONFIG['GEE']['S1_bands'],
-                'x_off':x_off, 
-                'y_off':y_off, 
-                'patch_size':CONFIG['patch_size'], 
-                'crs_code':UTM_EPSG,
-            }
-
-            if 'local' in destinations:
-                name_root = os.path.join(CONFIG['DATA_ROOT'],version,str(idx),'_'.join([str(idx),'GEE',pt['DL_S2'].split(':')[2][0:10], str(pt['lon']), str(pt['lat'])]))
-            else:
-                name_root = os.path.join(CONFIG['DATA_ROOT'],'tmp','_'.join([str(idx),'GEE',pt['DL_S2'].split(':')[2][0:10], str(pt['lon']), str(pt['lat'])]))
-
-            np.savez(name_root+'_S2arr.npz', arr=S2_arr.astype(np.float32))
-            np.savez(name_root+'_S1arr.npz', arr=S1_arr.astype(np.float32))
-            json.dump(GEE_meta, open(name_root+'_meta.json','w'))
-
-            _save_thumbnail((S2_arr[:,:,(3,2,1)]/10000).clip(0,1), name_root+'_S2thumb.png')
-            _save_thumbnail((((np.stack([S1_arr[:,:,0],np.zeros(S1_arr.shape[0:2]),S1_arr[:,:,1]])).transpose([1,2,0])+np.abs(S1_arr.min()))/(S1_arr.max()-S1_arr.min())).clip(0,1), name_root+'_S1thumb.png')
-
-            
-            if 'gcp' in destinations:
-                for ext in ['_S2arr.npz','_meta.json','_S1arr.npz','_S2thumb.png','_S1thumb.png']:
-                    gcp_client.upload(name_root+ext)
-                
-            if 'azure' in destinations:
-                for ext in ['_S2arr.npz','_meta.json','_S1arr.npz','_S2thumb.png','_S1thumb.png']:
-                    azure_client.upload(name_root+ext)
-                
-            if 'local' not in destinations:
-                for ext in ['_S2arr.npz','_meta.json','_S1arr.npz','_S2thumb.png','_S1thumb.png']:
-                    os.remove(name_root+ext)
-            
-            print (f'Done pt {idx}, S2_min: {S2_arr.min()}, S2_max: {S2_arr.max()}, S1_min: {S1_arr.min()}, S1_max: {S1_arr.max()}')
-        except Exception as e:
-            print (f'Error pt {idx}: {e}')
+        else:
+            print (f'Already done pt {idx}')
+            with open(os.path.join(os.getcwd(),'logs',f'{version}_gee.log'), "a") as f:
+                f.write(f"{idx}\n")
         
     return True
