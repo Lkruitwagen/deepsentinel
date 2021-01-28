@@ -1,9 +1,12 @@
 import json, requests, os, pygeos, logging, geojson, pyproj, io
+from functools import partial
+from itertools import product
 import pandas as pd
 import geopandas as gpd
 gpd.use_pygeos=True
 from datetime import datetime as dt
 from datetime import timedelta
+from shapely import geometry, ops
 import numpy as np
 import matplotlib.pyplot as plt
 from fuzzywuzzy import fuzz
@@ -11,6 +14,7 @@ import warnings
 warnings.filterwarnings("ignore", category=DeprecationWarning) 
 
 from deepsentinel.utils.storageutils import GCPClient, AzureClient
+from deepsentinel.utils.geoutils import get_utm_zone
 
 
 def OSM_downloader(version, pts, ii_ps, CONFIG, mp_idx, TLs, destinations):
@@ -459,8 +463,7 @@ def GEE_downloader(version, pts, ii_ps, CONFIG, mp_idx, TLs, destinations):
                 if not os.path.exists(os.path.join(CONFIG['DATA_ROOT'], version,str(idx))):
                     os.makedirs(os.path.join(CONFIG['DATA_ROOT'], version,str(idx)))
 
-
-                tl_avail = str(idx) in TLs.keys() #) and np.prod([kk in TLs[str(idx)].keys() for kk in ['utm_zone','x_off','y_off']])
+                tl_avail = TLs[str(idx)]!=None #) and np.prod([kk in TLs[str(idx)].keys() for kk in ['utm_zone','x_off','y_off']])
 
                 #print (idx, tl_avail, pt['lon'],pt['lat'])
 
@@ -571,8 +574,8 @@ def GEE_downloader(version, pts, ii_ps, CONFIG, mp_idx, TLs, destinations):
                 with open(os.path.join(os.getcwd(),'logs',f'{version}_gee.log'), "a") as f:
                     f.write(f"{idx}\n")
 
-            except Exception as e:
-                print (f'Error pt {idx}: {e}')
+            except:
+                raise
             
         else:
             print (f'Already done pt {idx}')

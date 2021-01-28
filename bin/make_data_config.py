@@ -1,6 +1,7 @@
 import os, yaml
 
 CONFIG = dict(
+    tiles_source = None, # one of [None, 'json','local']
     DATA_ROOT = '/data',       # root directory for data
     NE_ROOT = os.path.join(os.getcwd(),'data'),       # root directory for data
     CATALOG_ROOT = os.path.join(os.getcwd(),'data','catalog'), # root directory for catalog data

@@ -23,14 +23,14 @@ def generate_points(name, n_points, start_date, iso2, end_date, n_orbits, conf):
     \b
     PARAMETERS
     ----------
-    NAME: str
-        The name of the new dataset.
+    START_DATE: str
+        The start date for data collection in the form YYYY-mm-dd.
         
     N_POINTS: int
         The number of data points to generate.
         
-    START_DATE: str
-        The start date for data collection in the form YYYY-mm-dd.
+    NAME: str
+        The name of the new dataset.
     """
     
     from deepsentinel.utils.point_generator import PointGenerator
