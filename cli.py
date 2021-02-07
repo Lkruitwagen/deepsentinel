@@ -2,6 +2,8 @@ import click, os, logging, yaml, json
 from datetime import datetime as dt
 from click import command, option, Option, UsageError
 
+from deepsentinel.utils.utils import get_from_dict, set_in_dict, make_nested_dict
+
 logging.basicConfig(level=logging.INFO)
 
 @click.group()
@@ -187,14 +189,13 @@ def generate_samples(name, sources, destinations, conf):
     if 'gee' in sources:
         logger.info('gee')
         downloader.download_samples_GEE()
-    if 'lc' in sources:
+    if 'clc' in sources:
         downloader.download_samples_LC()
     if 'osm' in sources:
         downloader.download_samples_OSM()
         
     logger.info('DONE!')
-
-
+    
     
 @cli.command(
     context_settings=dict(
@@ -218,7 +219,7 @@ def train(ctx, conf, observers, name):
     --model_config--VAE--z_dim=16
     --model_config--VAE={\"z_dim\":16}
     """
-    from deepsentinel.utils.utils import get_from_dict, set_in_dict, make_nested_dict
+    
     from deepsentinel.main import ex
     from sacred.observers import FileStorageObserver
     from sacred.observers import GoogleCloudStorageObserver
@@ -272,7 +273,120 @@ def train(ctx, conf, observers, name):
         ex.observers.append(GoogleCloudStorageObserver(bucket=CONFIG['sacred']['gcp_bucket'], basedir=CONFIG['sacred']['gcp_basedir']))
         
     r = ex.run(config_updates=ctx_conf)
+    
+    
+@cli.command(
+    context_settings=dict(
+        ignore_unknown_options=True,
+        allow_extra_args=True,    
+    )
+)
+@click.option('--ml_conf', default=os.path.join(os.getcwd(),'conf','ML_CONFIG.yaml'), help='path to ML_CONFIG.yaml')
+@click.option('--test_conf', default=os.path.join(os.getcwd(),'conf','TEST_CONFIG.yaml'), help='path to ML_CONFIG.yaml')
+@click.pass_context
+def test(ctx, ml_conf, test_conf):
+    """
+    Run the final models to obtain final test results.
+    
+    \b
+    Any additional parameters can also be specified for the test results.
+    
+    Nested parameters can be specified like so:
+    --model_config--VAE--z_dim=16
+    --model_config--VAE={\"z_dim\":16}
+    """
+    
+    from deepsentinel.utils.utils import get_from_dict, set_in_dict, make_nested_dict
+    from deepsentinel.test import test
 
+    CONFIG = yaml.load(open(test_conf,'r'), Loader=yaml.SafeLoader)
+    ML_CONFIG = yaml.load(open(ml_conf,'r'), Loader=yaml.SafeLoader)
+    
+    logger=logging.getLogger('testing_runs')
+    
+    logger.info(f'Using config from {test_conf}')
+
+    
+    for item in ctx.args:
+        kks,vv = item.split('=')
+        kks = kks.split('--')[1:]
+        
+        # cast vv to the type from the nested config
+        vv_type = type(get_from_dict(CONFIG,kks))   
+        #override special cases
+        if vv_type==dict:
+            vv = json.loads(vv)
+        elif kks[0] in ['pretrain', 'finetune','load_run'] and vv=='None':
+            vv = None
+        elif kks[0]=='load_run':
+            vv = int(vv)
+        elif kks[0] in ['pretrain','finetune']:
+            vv = str(vv)
+        else:
+            vv = vv_type(vv)
+        
+        # set in our conf dict
+        set_in_dict(CONFIG,kks,vv)
+        
+    test(**CONFIG)
+    
+    
+    
+@cli.command(
+    context_settings=dict(
+        ignore_unknown_options=True,
+        allow_extra_args=True,    
+    )
+)
+@click.option('--conf', default=os.path.join(os.getcwd(),'conf','ML_CONFIG.yaml'), help='path to ML_CONFIG.yaml')
+@click.pass_context
+def mines_coal(ctx, conf):
+    """
+    Use a finetuned model to predict whether mining polygons are coal or not.
+    
+    \b
+    Any additional parameters can also be specified:
+    --device=cuda
+    
+    Nested parameters can be specified like so:
+    --model_config--VAE--z_dim=16
+    --model_config--VAE={\"z_dim\":16}
+    """
+    
+    from deepsentinel.utils.utils import get_from_dict, set_in_dict, make_nested_dict
+    from deepsentinel.classify_mines import classify_mines, mines_postprocess
+
+    CONFIG = yaml.load(open(conf,'r'), Loader=yaml.SafeLoader)
+    
+    logger=logging.getLogger('run_mines')
+    
+    logger.info(f'Using config from {conf}')
+
+    
+    for item in ctx.args:
+        kks,vv = item.split('=')
+        kks = kks.split('--')[1:]
+        
+        # cast vv to the type from the nested config
+        vv_type = type(get_from_dict(CONFIG,kks))   
+        #override special cases
+        if vv_type==dict:
+            vv = json.loads(vv)
+        elif kks[0] in ['pretrain', 'finetune','load_run'] and vv=='None':
+            vv = None
+        elif kks[0]=='load_run':
+            vv = int(vv)
+        elif kks[0] in ['pretrain','finetune']:
+            vv = str(vv)
+        else:
+            vv = vv_type(vv)
+        
+        # set in our conf dict
+        set_in_dict(CONFIG,kks,vv)
+        
+    classify_mines(**CONFIG)
+    mines_postprocess()
+        
 
 
 if __name__=="__main__":
