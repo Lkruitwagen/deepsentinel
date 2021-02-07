@@ -181,22 +181,38 @@ class SampleDownloader:
         
     def download_samples_LC(self):
         
-        if os.path.exists(os.path.join(self.CONFIG['DATA_ROOT'],self.version, 'tiles.json')):
+        # get tiles
+        if self.CONFIG['tiles_source'] =='json':
             TLs = json.load(open(os.path.join(self.CONFIG['DATA_ROOT'],self.version, 'tiles.json'),'r'))
+        elif self.CONFIG['tiles_source']=='local':
+            # try loading tiles from local
+            print ('loading tls from local')
+            TLs = {int(path.parent.name):json.load(path.open()) for path in Path(os.path.join(self.CONFIG['DATA_ROOT'], self.version)).rglob('*_tile.json')}
+
+            print (f'got TLS, lenkeys: {len(TLs.keys())}')
         else:
-            TLs = None
+            TLs = {kk:None for kk in self.pts.index.values.tolist()}
+            
+            
+        # get any log and filter
+        if os.path.exists(os.path.join(os.getcwd(),'logs',f'{self.version}_clc.log')):
+            with open(os.path.join(os.getcwd(),'logs',f'{self.version}_clc.log'),'r') as f:
+                lines = f.readlines()
+            done_idx = list(set([int(el) for el in lines]))
+        else:
+            done_idx = []
             
         args = []
-        step = (len(self.pts)//self.CONFIG['N_workers'])+1
+        step = (len(self.pts.loc[~self.pts.index.isin(done_idx) & self.pts.index.isin(list(TLs.keys()))])//self.CONFIG['N_workers'])+1
         
         for ii_w in range(self.CONFIG['N_workers']):
             args.append(
                 (self.version,
-                 self.pts.iloc[ii_w*step:(ii_w+1)*step,:],
-                 self.pts.iloc[ii_w*step:(ii_w+1)*step,:].index.values,
+                 self.pts.loc[~self.pts.index.isin(done_idx) & self.pts.index.isin(list(TLs.keys()))].iloc[ii_w*step:(ii_w+1)*step,:],
+                 self.pts.loc[~self.pts.index.isin(done_idx) & self.pts.index.isin(list(TLs.keys()))].iloc[ii_w*step:(ii_w+1)*step,:].index.values,
                  self.CONFIG,
                  ii_w,
-                 {str(kk):TLs[str(kk)] for kk in self.pts.iloc[ii_w*step:(ii_w+1)*step,:].index.values},
+                 {str(kk):TLs[kk] for kk in self.pts.loc[~self.pts.index.isin(done_idx) & self.pts.index.isin(list(TLs.keys()))].iloc[ii_w*step:(ii_w+1)*step,:].index.values},
                  self.destinations
                 )
             )

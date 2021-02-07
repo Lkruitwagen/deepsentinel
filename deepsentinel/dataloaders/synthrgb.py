@@ -1,4 +1,4 @@
-import glob, yaml, os, json
+import glob, yaml, os, json, random
 
 import numpy as np
 import pandas as pd
@@ -30,12 +30,12 @@ class SynthRGBDataloader(VAEDataloader):
         
     """
 
-    def __init__(self, data_config, data_dir, bands=None, source='GEE', channel_stats = None, patch_size=64):
+    def __init__(self, data_config, data_dir, bands=None, source='GEE', channel_stats = None, patch_size=64, start_por=0., end_por=1., seed=None):
         """
         Instantiate the dataloader, populate the data records
         """
         
-        super().__init__(data_config, data_dir, bands, source, channel_stats, patch_size)      
+        super().__init__(data_config=data_config, data_dir=data_dir, bands=bands, source=source, channel_stats=channel_stats, patch_size=patch_size, start_por=start_por, end_por=end_por, seed=seed)      
         
         band_idx = dict(zip(self.data_config[source]['S2_bands'],list(range(len(self.data_config[source]['S2_bands'])))))
         

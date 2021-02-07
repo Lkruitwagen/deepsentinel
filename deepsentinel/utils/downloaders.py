@@ -11,7 +11,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 from fuzzywuzzy import fuzz
 import warnings
-warnings.filterwarnings("ignore", category=DeprecationWarning) 
+warnings.filterwarnings("ignore") 
 
 from deepsentinel.utils.storageutils import GCPClient, AzureClient
 from deepsentinel.utils.geoutils import get_utm_zone
@@ -99,7 +99,10 @@ def OSM_downloader(version, pts, ii_ps, CONFIG, mp_idx, TLs, destinations):
 def DL_CLC_downloader(version, pts, ii_ps, CONFIG, mp_idx, TLs, destinations):
     
     import descarteslabs as dl
+    import warnings
+    warnings.filterwarnings("ignore") 
     raster_client = dl.Raster()
+    
     
     if 'gcp' in destinations:
         gcp_client = GCPClient(CONFIG['gcp_credentials_path'],CONFIG['gcp_storage_bucket'],version)
@@ -122,7 +125,8 @@ def DL_CLC_downloader(version, pts, ii_ps, CONFIG, mp_idx, TLs, destinations):
             im_arr[arr==int(kk),2] = colmap[kk]['color'][2]
 
         fig, ax = plt.subplots(1,1,figsize=(6,6))
-        ax.imshow(im_arr)
+        #print (im_arr.min(), im_arr.max())
+        ax.imshow(im_arr.astype(int).clip(0,255))
         ax.axis('off')
         fig.savefig(path,bbox_inches='tight',pad_inches=0)
         plt.close()
@@ -133,70 +137,95 @@ def DL_CLC_downloader(version, pts, ii_ps, CONFIG, mp_idx, TLs, destinations):
         if not os.path.exists(os.path.join(CONFIG['DATA_ROOT'], version,str(idx))):
             os.makedirs(os.path.join(CONFIG['DATA_ROOT'], version,str(idx)))
             
+        if 'local' in destinations:
+            name_root = os.path.join(CONFIG['DATA_ROOT'],version,str(idx),'_'.join([str(idx),'LC',pt['DL_S2'].split(':')[2][0:10], str(pt['lon']), str(pt['lat'])]))
+
+        else:
+            name_root = os.path.join(CONFIG['DATA_ROOT'],'tmp','_'.join([str(idx),'LC',pt['DL_S2'].split(':')[2][0:10], str(pt['lon']), str(pt['lat'])]))
             
-        # get the tile
-        tile = TLs[str(idx)]
+        # check the work done and skip if necessary
+        checkers = []
+        if 'gcp' in destinations:
+            for ext in ['_S2arr.npz','_S2meta.json','_S1arr.npz','_S1meta.json','_tile.json','_S2thumb.png','_S1thumb.png']:
+                checkers.append(gcp_client.check(name_root+ext))
 
-        
-        try:
+        if 'azure' in destinations:
+            for ext in ['_S2arr.npz','_S2meta.json','_S1arr.npz','_S1meta.json','_tile.json','_S2thumb.png','_S1thumb.png']:
+                checkers.append(azure_client.check(name_root+ext))
 
-            LC_scenes, LC_ctx = dl.scenes.search(
-                                    aoi=tile['geometry'],
-                                    products=CONFIG['DL_LC']['LC_product'],
-                                    start_datetime=CONFIG['DL_LC']['LC_start_date'],
-                                    end_datetime=CONFIG['DL_LC']['LC_end_date']
-                                )
-
-            # mosaic
-            for ii_s, s in enumerate(LC_scenes):
-                print (s.properties['id'])
-
-                s_arr, LC_meta = raster_client.ndarray(s.properties['id'], 
-                                                bands=CONFIG['DL_LC']['LC_bands'], 
-                                                scales = [(0,255,0,255)]*len(CONFIG['DL_LC']['LC_bands']),
-                                                data_type='Byte',
-                                                dltile=tile['properties']['key'], 
-                                                )
-
-                if ii_s==0:
-                    LC_arr = s_arr
-                    LC_arr[LC_arr>=48]=0
-
-                else:
-                    LC_arr[LC_arr==0] = s_arr[LC_arr==0] 
-                    LC_arr[LC_arr>=48]=0
-
-
-            if 'local' in destinations:
-                name_root = os.path.join(CONFIG['DATA_ROOT'],version,str(idx),'_'.join([str(idx),'LC',pt['DL_S2'].split(':')[2][0:10], str(pt['lon']), str(pt['lat'])]))
-
-            else:
-                name_root = os.path.join(CONFIG['DATA_ROOT'],'tmp','_'.join([str(idx),'LC',pt['DL_S2'].split(':')[2][0:10], str(pt['lon']), str(pt['lat'])]))
-                
-            np.savez(name_root+'_LCarr.npz', arr=LC_arr.astype(np.uint8))
-            json.dump(LC_meta, open(name_root+'_LCmeta.json','w'))
-
-            _save_LC_thumbnail(LC_arr, name_root+'_LCthumb.png')
+        if 'local' in destinations:
+            for ext in ['_S2arr.npz','_S2meta.json','_S1arr.npz','_S1meta.json','_tile.json','_S2thumb.png','_S1thumb.png']:
+                checkers.append(os.path.exists(name_root+ext))
             
-            if 'gcp' in destinations:
-                for ext in ['_LCarr.npz','_LCmeta.json','_LCthumb.png']:
-                    gcp_client.upload(name_root+ext)
-                
-            if 'azure' in destinations:
-                for ext in ['_LCarr.npz','_LCmeta.json','_LCthumb.png']:
-                    azure_client.upload(name_root+ext)
-                
-            if 'local' not in destinations:
-                for ext in ['_LCarr.npz','_LCmeta.json','_LCthumb.png']:
-                    os.remove(name_root+ext)
-                    
+        if not np.product(checkers):
             
-                
+            
+            # get the tile
+            tile = TLs[str(idx)]
 
-            print (f'done pt {idx}, arr_min: {LC_arr.min()}, arr_max: {LC_arr.max()}, latlon: {pt["lon"]},{pt["lat"]}')
-        except Exception as e:
-            print ('Error!')
-            print (e)
+
+            try:
+
+                LC_scenes, LC_ctx = dl.scenes.search(
+                                        aoi=tile['geometry'],
+                                        products=CONFIG['DL_LC']['LC_product'],
+                                        start_datetime=CONFIG['DL_LC']['LC_start_date'],
+                                        end_datetime=CONFIG['DL_LC']['LC_end_date']
+                                    )
+
+                # mosaic
+                for ii_s, s in enumerate(LC_scenes):
+                    #print (s.properties['id'])
+
+                    s_arr, LC_meta = raster_client.ndarray(s.properties['id'], 
+                                                    bands=CONFIG['DL_LC']['LC_bands'], 
+                                                    scales = [(0,255,0,255)]*len(CONFIG['DL_LC']['LC_bands']),
+                                                    data_type='Byte',
+                                                    dltile=tile['properties']['key'], 
+                                                    )
+
+                    if ii_s==0:
+                        LC_arr = s_arr
+                        LC_arr[LC_arr>=48]=0
+
+                    else:
+                        LC_arr[LC_arr==0] = s_arr[LC_arr==0] 
+                        LC_arr[LC_arr>=48]=0
+
+
+
+
+                np.savez(name_root+'_LCarr.npz', arr=LC_arr.astype(np.uint8))
+                json.dump(LC_meta, open(name_root+'_LCmeta.json','w'))
+
+                _save_LC_thumbnail(LC_arr, name_root+'_LCthumb.png')
+
+                if 'gcp' in destinations:
+                    for ext in ['_LCarr.npz','_LCmeta.json','_LCthumb.png']:
+                        gcp_client.upload(name_root+ext)
+
+                if 'azure' in destinations:
+                    for ext in ['_LCarr.npz','_LCmeta.json','_LCthumb.png']:
+                        azure_client.upload(name_root+ext)
+
+                if 'local' not in destinations:
+                    for ext in ['_LCarr.npz','_LCmeta.json','_LCthumb.png']:
+                        os.remove(name_root+ext)
+
+
+
+
+                print (f'done pt {idx}, arr_min: {LC_arr.min()}, arr_max: {LC_arr.max()}, latlon: {pt["lon"]},{pt["lat"]}')
+                with open(os.path.join(os.getcwd(),'logs',f'{version}_clc.log'), "a") as f:
+                    f.write(f"{idx}\n")
+            except Exception as e:
+                print ('Error!')
+                print (e)
+                
+        else:
+            print (f'got pt {idx} already')
+            with open(os.path.join(os.getcwd(),'logs',f'{version}_clc.log'), "a") as f:
+                f.write(f"{idx}\n")
 
     
     return ii_ps
@@ -502,6 +531,11 @@ def GEE_downloader(version, pts, ii_ps, CONFIG, mp_idx, TLs, destinations):
                     utm_zone = TLs[str(idx)]['properties']['zone']
                     x_off, y_off = TLs[str(idx)]['properties']['geotrans'][0], TLs[str(idx)]['properties']['geotrans'][3]
                     UTM_EPSG = TLs[str(idx)]['properties']['cs_code']
+                
+                #print ('pts', pt_wgs, bbox_wgs.centroid)
+                #print ('utm zones', utm_zone, utm_zone2)
+                #print ('x_off, y_off', x_off, x_off2,y_off, y_off2)
+                #print ('UTM_EPSG', UTM_EPSG, UTM_EPSG2)
 
 
                 #print ('utm_zone',utm_zone,TLs[str(idx)]['properties']['zone'])
@@ -574,8 +608,8 @@ def GEE_downloader(version, pts, ii_ps, CONFIG, mp_idx, TLs, destinations):
                 with open(os.path.join(os.getcwd(),'logs',f'{version}_gee.log'), "a") as f:
                     f.write(f"{idx}\n")
 
-            except:
-                raise
+            except Exception as e:
+                print ('Error! ',e)
             
         else:
             print (f'Already done pt {idx}')
