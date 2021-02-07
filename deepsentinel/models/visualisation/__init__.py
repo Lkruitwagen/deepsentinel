@@ -1,1 +1,2 @@
 from deepsentinel.models.visualisation.plot_rgb import plot_rgb
+from deepsentinel.models.visualisation.plot_categorical import plot_categorical

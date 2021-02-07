@@ -11,7 +11,7 @@ def plot_rgb(input_tensor, N_samples, input_bands, rgb_bands, channel_stats,cons
         rgb_arr[:,ii_b,:,:] = (input_tensor[:N_samples,band_idx[b],:,:] * channel_stats['std'][b]) + channel_stats['mean'][b]
         
     if constellation=='S2':
-        rgb_arr = (rgb_arr/10000).clip(0.,1.)
+        rgb_arr = (rgb_arr/10000*2.).clip(0.,1.)
     elif constellation=='S1':
         #print ('min','max',rgb_arr.min(), rgb_arr.max())
         rgb_arr = ((rgb_arr+50)/60).clip(0.,1.)
