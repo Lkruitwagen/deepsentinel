@@ -1,4 +1,4 @@
-""" A CNN variational autoencoder from https://github.com/sksq96/pytorch-vae/blob/master/vae.py """
+""" Fully-convolutional neural network with bits taken from https://github.com/milesial/Pytorch-UNet/blob/master/unet/unet_parts.py"""
 
 import torch
 import torch.nn as nn
@@ -8,19 +8,6 @@ from torch.autograd import Variable
 from deepsentinel.models.encoders import encoders
 
 
-class Flatten(nn.Module):
-    def forward(self, input):
-        return input.view(input.size(0), -1)
-
-
-class UnFlatten(nn.Module):
-    def __init__(self,shape):
-        super(UnFlatten, self).__init__()
-        self.shape=shape
-        
-    def forward(self, input):
-        return input.view(input.size(0), *self.shape[1:])
-    
 class DoubleConv(nn.Module):
     """(convolution => [BN] => ReLU) * 2"""
 
@@ -39,6 +26,20 @@ class DoubleConv(nn.Module):
 
     def forward(self, x):
         return self.double_conv(x)
+
+
+class Down(nn.Module):
+    """Downscaling with maxpool then double conv"""
+
+    def __init__(self, in_channels, out_channels):
+        super().__init__()
+        self.maxpool_conv = nn.Sequential(
+            nn.MaxPool2d(2),
+            DoubleConv(in_channels, out_channels)
+        )
+
+    def forward(self, x):
+        return self.maxpool_conv(x)
 
 
 class Up(nn.Module):
@@ -82,68 +83,21 @@ class OutConv(nn.Module):
 
     def forward(self, x):
         x = self.conv(x)
-        return x # maybe int he future we rescale to [-1,1] and tanh activtion
+        return F.sigmoid(x)
 
 
-
-class VAE(nn.Module):
-    def __init__(self, encoder, encoder_params, bilinear=False, image_channels=5,c_dim=64, h_dim=64*8*8, z_dim=64*8*8):
-        super(VAE, self).__init__()
+class MinesClassifier(nn.Module):
+    def __init__(self, encoder, encoder_params, n_classes, bilinear):
+        super(MinesClassifier, self).__init__()
         self.encoder = encoders[encoder](**encoder_params)
         
+        self.maxpool1 = nn.MaxPool2d(kernel_size=3, stride=2, padding=1) #'512x4x4'
+        self.maxpool2 = nn.MaxPool2d(kernel_size=4, stride=1) #'512'
+        self.out_lin = nn.Linear(512,1)
         
-        
-        self.conv1 = nn.Conv2d(512,c_dim,kernel_size=1) #512-> 64
-        self.conv2 = nn.Conv2d(512,c_dim,kernel_size=1) # 512->64
-        
-        self.flatten=Flatten() # 64x8x8
-        
-        ### let's not do linear, let's do 1x1 conv.
-        #self.fc1 = nn.Linear(h_dim, z_dim) # mean
-        #self.fc2 = nn.Linear(h_dim, z_dim) # logvar
-        #self.fc3 = nn.Linear(z_dim, h_dim)
-        
-        self.unflatten=UnFlatten(shape=(-1,c_dim,8,8)) # 64*8*8 -> 64,8,8
-        
-        self.conv3 = nn.Conv2d(c_dim,512,kernel_size=1)
-        #
-        
-        self.decoder = nn.Sequential(
-            Up(512, 256, bilinear),
-            Up(256, 128, bilinear),
-            Up(128, 64, bilinear),
-            Up(64, 32, bilinear),
-            OutConv(32, image_channels)
-        )
-        
-        
-    def reparameterize(self, mu, logvar):
-        std = logvar.mul(0.5).exp_()
-        # return torch.normal(mu, std)
-        #esp = torch.randn(*mu.size())
-        esp = torch.cuda.FloatTensor(*mu.size()).normal_()
-        z = mu + std * esp
-        return z
-    
-    def bottleneck(self, h):
-        mu, logvar = self.conv1(h), self.conv2(h)
-        mu = self.flatten(mu)
-        logvar = self.flatten(logvar)
-        #print ('mu',mu)
-        #print ('logvar',logvar)
-        z = self.reparameterize(mu, logvar)
-        return z, mu, logvar
-        
-    def representation(self, x):
-        return self.bottleneck(self.encoder(x))[0]
-
     def forward(self, x):
-        h = self.encoder(x)
-        #h = self.conv1(h)
-        #print ('conv1',h.shape)
-        #h = self.flatten(h)
-        #print ('flatten',h.shape)
-        z, mu, logvar = self.bottleneck(h)
-        z = self.unflatten(z)
-        z = self.conv3(z)
-        return self.decoder(z), mu, logvar
+        x = self.encoder(x)
+        x = self.maxpool1(x)
+        x = self.maxpool2(x)
+        x = self.out_lin(torch.squeeze(x))
+        return torch.sigmoid(x)

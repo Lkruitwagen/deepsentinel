@@ -1,5 +1,7 @@
+NE_ROOT: /home/jupyter/deepsentinel/data
+cv_split: 0.9
 device: cuda
-encoder: basic_bottleneck
+encoder: resnet18
 encoder_layers:
   basic_bottleneck:
   - encoder.net.0.weight
@@ -10,66 +12,240 @@ encoder_layers:
   - encoder.net.4.bias
   - encoder.net.6.weight
   - encoder.net.6.bias
+  resnet18: []
 encoder_params:
   basic_bottleneck:
     input_channels: 5
-finetune: synthetic_rgb
+  resnet18:
+    input_channels: 14
+finetune: landcover
 finetune_config:
+  landcover:
+    BATCH_SIZE: 600
+    DATALOADER_WORKERS: 24
+    EPOCHS: 200
+    EPOCH_BREAK_WINDOW: 40
+    LOG_INTERVAL: 1
+    LR: 0.0005
   synthetic_rgb:
-    BATCH_SIZE: 64
-    DATALOADER_WORKERS: 6
-    EPOCHS: 10
-    LOG_INTERVAL: 4
+    BATCH_SIZE: 512
+    DATALOADER_WORKERS: 24
+    EPOCHS: 150
+    EPOCH_BREAK_WINDOW: 100
+    LOG_INTERVAL: 1
     LR: 5.0e-05
 finetune_loader_config:
-  synthetic_rgb:
+  landcover:
     bands:
+    - B1
     - B2
     - B3
     - B4
+    - B5
+    - B6
+    - B7
+    - B8
+    - B8A
+    - B9
+    - B11
+    - B12
     - VV
     - VH
     channel_stats: /home/jupyter/deepsentinel/data/channel_stats/DEMO_unlabelled_GEE.json
-    data_config: /home/jupyter/deepsentinel/conf/DATA_CONFIG.yaml
-    data_dir: /data/DEMO_unlabelled/
+    data_config: /home/jupyter/deepsentinel/conf/DATA_100_CONFIG.yaml
+    data_dir: /data_100/10k_labelled/
+    patch_size: 128
+    source: GEE
+  synthetic_rgb:
+    bands:
+    - B1
+    - B2
+    - B3
+    - B4
+    - B5
+    - B6
+    - B7
+    - B8
+    - B8A
+    - B9
+    - B11
+    - B12
+    - VV
+    - VH
+    channel_stats: /home/jupyter/deepsentinel/data/channel_stats/DEMO_unlabelled_GEE.json
+    data_config: /home/jupyter/deepsentinel/conf/DATA_100_CONFIG.yaml
+    data_dir: /data_100/10k_labelled/
     patch_size: 128
     source: GEE
 finetune_model_config:
+  landcover:
+    activation: sigmoid
+    bilinear: false
   synthetic_rgb:
-    h_dim: 9216
-    image_channels: 5
-    z_dim: 32
+    activation: null
+    bilinear: false
 load_run: null
-pretrain: VAE
+mines_config:
+  BATCH_SIZE: 256
+  DATALOADER_WORKERS: 6
+  EPOCHS: 5
+  LOG_INTERVAL: 4
+  LR: 1.0e-05
+mines_load_run: 179
+mines_loader_config:
+  bands:
+  - B2
+  - B3
+  - B4
+  - VV
+  - VH
+  channel_stats: /home/jupyter/deepsentinel/data/channel_stats/DEMO_unlabelled_GEE.json
+  data_config: /home/jupyter/deepsentinel/conf/DATA_100_CONFIG.yaml
+  patch_size: 128
+  source: GEE
+mines_model_config:
+  bilinear: false
+  n_classes: 1
+pretrain: contrastive_loss
 pretrain_config:
   VAE:
-    BATCH_SIZE: 128
-    DATALOADER_WORKERS: 6
+    BATCH_SIZE: 600
+    DATALOADER_WORKERS: 24
     EPOCHS: 20
+    EPOCH_BREAK_WINDOW: 50
     LOG_INTERVAL: 10
+    LOSS_CONVERGENCE: 0.0005
+    LR: 5.0e-05
+  contrastive_loss:
+    BATCH_SIZE: 768
+    DATALOADER_WORKERS: 24
+    EPOCHS: 1
+    EPOCH_BREAK_WINDOW: 50
+    LOG_INTERVAL: 1
+    LOSS_CONVERGENCE: 0.0005
+    LR: 5.0e-05
+  tile2vec:
+    BATCH_SIZE: 600
+    DATALOADER_WORKERS: 24
+    EPOCHS: 20
+    EPOCH_BREAK_WINDOW: 50
+    LOG_INTERVAL: 10
+    LOSS_CONVERGENCE: 0.0005
     LR: 5.0e-05
 pretrain_loader_config:
   VAE:
     bands:
+    - B1
     - B2
     - B3
     - B4
+    - B5
+    - B6
+    - B7
+    - B8
+    - B8A
+    - B9
+    - B11
+    - B12
     - VV
     - VH
     channel_stats: /home/jupyter/deepsentinel/data/channel_stats/DEMO_unlabelled_GEE.json
     data_config: /home/jupyter/deepsentinel/conf/DATA_CONFIG.yaml
-    data_dir: /data/DEMO_unlabelled/
+    data_dir: /data_100/100k_unlabelled/
+    patch_size: 128
+    source: GEE
+  contrastive_loss:
+    N_jitters:
+      max: 10
+      min: 1
+    aug_crop:
+      max: 16
+      min: 1
+    augmentations:
+    - crop
+    - dropout
+    - jitter
+    bands:
+    - B1
+    - B2
+    - B3
+    - B4
+    - B5
+    - B6
+    - B7
+    - B8
+    - B8A
+    - B9
+    - B11
+    - B12
+    - VV
+    - VH
+    channel_stats: /home/jupyter/deepsentinel/data/channel_stats/DEMO_unlabelled_GEE.json
+    data_config: /home/jupyter/deepsentinel/conf/DATA_CONFIG.yaml
+    data_dir: /data_100/100k_unlabelled/
+    jitter_params:
+      brightness:
+        max: 0.1
+        min: 0.01
+      contrast:
+        max: 0.1
+        min: 0.01
+      hue:
+        max: 0.1
+        min: 0.01
+      saturation:
+        max: 0.1
+        min: 0.01
+    patch_size: 128
+    ramp_epochs: 10
+    random_crop: true
+    s1_dropout:
+      max: 0.3
+      min: 0.01
+    s2_dropout:
+      max: 0.3
+      min: 0.01
+    source: GEE
+    warmup_epochs: 5
+  tile2vec:
+    bands:
+    - B1
+    - B2
+    - B3
+    - B4
+    - B5
+    - B6
+    - B7
+    - B8
+    - B8A
+    - B9
+    - B11
+    - B12
+    - VV
+    - VH
+    channel_stats: /home/jupyter/deepsentinel/data/channel_stats/DEMO_unlabelled_GEE.json
+    data_config: /home/jupyter/deepsentinel/conf/DATA_CONFIG.yaml
+    data_dir: /data_100/100k_unlabelled/
     patch_size: 128
     source: GEE
 pretrain_model_config:
   VAE:
-    h_dim: 9216
-    image_channels: 5
-    z_dim: 32
+    bilinear: false
+    c_dim: 64
+    h_dim: 4096
+    image_channels: 14
+    z_dim: 4096
+  contrastive_loss:
+    activation: relu
+  tile2vec:
+    bilinear: false
+    image_channels: 14
+random_seed: 5
 sacred:
-  gcp_basedir: /
+  gcp_basedir: ''
   gcp_bucket: deepsentinel-models
   local: /home/jupyter/deepsentinel/experiments/sacred
+trn_split: 0.7
 verbose: true
 vis_params:
   VAE:
@@ -78,6 +254,26 @@ vis_params:
     - B4
     - B3
     - B2
+  contrastive_loss:
+    IMAGE_SAMPLES: 10
+    RGB_BANDS:
+    - B4
+    - B3
+    - B2
+    SYNTH_RGB:
+    - VV
+    - VV
+    - VH
+  landcover:
+    IMAGE_SAMPLES: 10
+    RGB_BANDS:
+    - B4
+    - B3
+    - B2
+    SYNTH_RGB:
+    - VV
+    - VV
+    - VH
   synthetic_rgb:
     IMAGE_SAMPLES: 10
     RGB_BANDS:
@@ -88,3 +284,9 @@ vis_params:
     - VV
     - VV
     - VH
+  tile2vec:
+    IMAGE_SAMPLES: 10
+    RGB_BANDS:
+    - B4
+    - B3
+    - B2
