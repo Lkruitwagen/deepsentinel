@@ -11,7 +11,8 @@ import numpy as np
 import matplotlib.pyplot as plt
 from fuzzywuzzy import fuzz
 import warnings
-warnings.filterwarnings("ignore") 
+warnings.filterwarnings("ignore", category=DeprecationWarning) 
+from shapely.ops import transform
 
 from deepsentinel.utils.storageutils import GCPClient, AzureClient
 from deepsentinel.utils.geoutils import get_utm_zone
@@ -46,7 +47,6 @@ def OSM_downloader(version, pts, ii_ps, CONFIG, mp_idx, TLs, destinations):
         # get the tile
         tile = TLs[str(idx)]
 
-        
         try:
             
             tile['properties']['continent'] = pt['continent']
@@ -454,7 +454,7 @@ def GEE_downloader(version, pts, ii_ps, CONFIG, mp_idx, TLs, destinations):
         pixels_response = session.post(url, body)
         pixels_content = pixels_response.content
         
-        # print (pixels_content)
+        #print (pixels_content)
 
         arr =  np.load(io.BytesIO(pixels_content))
         
@@ -502,30 +502,25 @@ def GEE_downloader(version, pts, ii_ps, CONFIG, mp_idx, TLs, destinations):
 
                     pt_wgs = geometry.Point(pt['lon'],pt['lat'])
 
-                    # reprojection functions
-                    proj_utm = pyproj.Proj(proj='utm',zone=utm_zone,ellps='WGS84')
-                    reproj_wgs_utm = partial(pyproj.transform, PROJ_WGS, proj_utm)
-                    reproj_utm_wgs = partial(pyproj.transform, proj_utm, PROJ_WGS)
-
-                    # get utm pt
-                    pt_utm = ops.transform(reproj_wgs_utm, pt_wgs)
-
-                    # get utm bbox
-                    bbox_utm = geometry.box(
-                        pt_utm.x-(CONFIG['patch_size']*CONFIG['resolution'])/2, 
-                        pt_utm.y-(CONFIG['patch_size']*CONFIG['resolution'])/2, 
-                        pt_utm.x+(CONFIG['patch_size']*CONFIG['resolution'])/2, 
-                        pt_utm.y+(CONFIG['patch_size']*CONFIG['resolution'])/2)
-
-                    # reproj to wgs
-                    bbox_wgs = ops.transform(reproj_utm_wgs, bbox_utm)
-
-                    x_off, y_off = bbox_utm.bounds[0], bbox_utm.bounds[1]
-
                     if pt['lat']>0:
                         UTM_EPSG = f'EPSG:{str(326)+str(utm_zone)}'
                     else:
                         UTM_EPSG = f'EPSG:{str(327)+str(utm_zone)}'
+                        
+                    wgs84 = pyproj.CRS('EPSG:4326')
+                    utm = pyproj.CRS(UTM_EPSG); print('utm', utm)  # 7 is for south
+
+                    project = pyproj.Transformer.from_crs(wgs84, utm, always_xy=True).transform
+                    utm_point = transform(project, pt_wgs) # wgs84_pt)
+
+                    bbox_utm = geometry.box(
+                        utm_point.x-(CONFIG['patch_size']*CONFIG['resolution'])/2, 
+                        utm_point.y-(CONFIG['patch_size']*CONFIG['resolution'])/2, 
+                        utm_point.x+(CONFIG['patch_size']*CONFIG['resolution'])/2, 
+                        utm_point.y+(CONFIG['patch_size']*CONFIG['resolution'])/2);
+
+                    #  bounding box is a (minx, miny, maxx, maxy) tuple.           
+                    x_off, y_off = bbox_utm.bounds[0], bbox_utm.bounds[3]
 
                 else:
                     utm_zone = TLs[str(idx)]['properties']['zone']
