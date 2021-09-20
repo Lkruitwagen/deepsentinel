@@ -6,7 +6,7 @@ Earth observation offers new insight into anthropogenic changes to nature, and h
 
 Machine learning applications using earth observation imagery present some unique problems. Multispectral images are often confounded by interference from clouds and atmosphere conditions. And while there is ample imagery data, geospatially-localised labels are sparse, with data quality and completeness heavily geographically skewed.
 
-_DeepSentinel_ seeks to address these problems. DeepSentinel fuses Sentinel-2 imagery with Sentinel-1 SAR imagery which is unobstructed by clouds and atmospher conditions. We are building the largest publicly available corpus of matched Sentinel-1 and -2 imagery for the purposes of self-supervised pre-training. For select geographies, we sample the best-available land-use and land-cover datasets.
+_DeepSentinel_ seeks to address these problems. DeepSentinel fuses Sentinel-2 imagery with Sentinel-1 SAR imagery which is unobstructed by clouds and atmosphere conditions. We are building the largest publicly available corpus of matched Sentinel-1 and -2 imagery for the purposes of self-supervised pre-training. For select geographies, we sample the best-available land-use and land-cover datasets.
 
 Our goal is to produce pre-trained general purpose convolutional neural networks for a number of use cases, see Figure 1. We want DeepSentinel to be as widely accessible as possible - we are developing our training corpus and models with both DescartesLabs and Google Earth Engine samples and are developing everything open-source. Please check back regularly for updates or watch or star!
 
